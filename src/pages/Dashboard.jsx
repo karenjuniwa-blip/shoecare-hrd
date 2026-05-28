@@ -5,7 +5,7 @@ import { useAdmin } from '../hooks/useAdmin'
 import { unduhExcelHRD, unduhPdfHRD } from '../utils/ekspor'
 import PinLock from '../components/PinLock'
 
-// ── PERBAIKAN 1: Mengembalikan Array COLORS (Termudah, No Internet) ──
+// ── PERBAIKAN 1: Mengembalikan Array COLORS ──
 const COLORS = ['#3b82f6','#22c55e','#f59e0b','#a78bfa','#ef4444','#14b8a6']
 
 // ── PERBAIKAN 2: Mengembalikan Fungsi Inisial ──
@@ -23,12 +23,11 @@ export default function Dashboard() {
   const [karyawan, setKaryawan] = useState([])
   const [absenMap, setAbsenMap] = useState({})
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null) // Keamanan: Tetap ada try/catch agar stabil
+  const [error, setError] = useState(null)
 
   const { isAdmin } = useAdmin()
   const [showPin, setShowPin] = useState(!isAdmin)
 
-  // Keamanan: Tetap ambil data HANYA jika PIN sudah aman
   useEffect(() => {
     if (!showPin) {
       loadData()
@@ -45,7 +44,6 @@ export default function Dashboard() {
         getAbsensi(todayStr())
       ])
 
-      // Validasi Array agar tidak blank putih
       const listKaryawan = Array.isArray(k?.data) ? k.data : []
       const listAbsen    = Array.isArray(a?.data) ? a.data : []
 
@@ -72,12 +70,11 @@ export default function Dashboard() {
     s + (k.jabatan?.gaji_pokok || 0) + (k.jabatan?.tunjangan || 0)
   , 0)
 
-  // Fungsi pembantu untuk memproses cetak data bulanan secara aman
+  // ── LOGIKA PEMBANTU UNTUK MEMPROSES EKSPOR DATA ──
   const tanganiEkspor = (jenis) => {
     const namaBulan = new Date().toLocaleString('id-ID', { month: 'long' })
     const tahunIni = new Date().getFullYear().toString()
     
-    // Pemetaan data mentah dashboard agar sesuai struktur kolom laporan ekspor
     const dataFormatted = karyawan.map(k => ({
       nama: k.nama,
       jabatan: k.jabatan,
@@ -85,7 +82,7 @@ export default function Dashboard() {
       total_izin_sakit: ['sakit','izin'].includes(absenMap[k.id]) ? 1 : 0,
       gaji_pokok: k.jabatan?.gaji_pokok || 0,
       tunjangan: k.jabatan?.tunjangan || 0,
-      bonus_pasang: 0, // Parameter fallback harian awal
+      bonus_pasang: 0, 
       gaji_bersih: (k.jabatan?.gaji_pokok || 0) + (k.jabatan?.tunjangan || 0)
     }))
 
@@ -96,7 +93,6 @@ export default function Dashboard() {
     }
   }
 
-  // Tampilan PIN Lock (Keamanan: Tetap terjaga)
   if (showPin) {
     return (
       <>
@@ -158,7 +154,7 @@ export default function Dashboard() {
         ))}
       </div>
 
-      {/* ── TOMBOL EKSPOR LAPORAN REKAPITULASI (BARU) ── */}
+      {/* ── TOMBOL EKSPOR LAPORAN BARU ── */}
       <div style={{ display:'flex', gap:10, padding:'12px 16px 4px' }}>
         <button
           onClick={() => tanganiEkspor('excel')}
@@ -183,7 +179,7 @@ export default function Dashboard() {
           onClick={() => navigate('/tambah')}
           style={{ display:'flex', alignItems:'center', gap:5, background:'var(--accent)', color:'#fff', border:'none', borderRadius:'var(--radius-sm)', padding:'6px 14px', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}
         >
-          + Tambah
+          + Tambay
         </button>
       </div>
 
@@ -198,8 +194,6 @@ export default function Dashboard() {
               onClick={() => navigate(`/dashboard/${k.id}`)}
               style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 0', borderBottom: i < karyawan.length-1 ? '1px solid var(--border)' : 'none', cursor:'pointer' }}
             >
-              
-              {/* ── PERBAIKAN 3: KEMBALI KE BENTUK PALING SEDERHANA (Inisial Berwarna) ── */}
               <div style={{
                 width:34,
                 height:34,
