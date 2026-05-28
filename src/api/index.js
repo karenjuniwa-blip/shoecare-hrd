@@ -43,7 +43,7 @@ export const deleteShift = (id)         => api.delete(`/shift?id=eq.${id}`)
 
 // ── PENGATURAN ────────────────────────────
 export const getPengaturan   = ()           => api.get('/pengaturan')
-export const savePengaturan  = (body)       => api.put('/pengaturan', body)
+export const savePengaturan  = (body)       => api.patch(`/pengaturan?id=eq.${body.id || 1}`, body)
 
 export const rupiah = (n) =>
   'Rp ' + Math.round(n || 0).toLocaleString('id-ID')
