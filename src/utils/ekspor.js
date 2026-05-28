@@ -114,7 +114,7 @@ export function unduhPdfHRD(dataKaryawan, periodeBulan, periodeTahun) {
   `).join('')
 
   // Rangkaian struktur HTML & CSS template PDF resmi
-  const elementHtml Laporan = `
+  const elementHtmlLaporan = `
     <div style="font-family: 'Arial', sans-serif; padding: 20px; color: #2c3e50;">
       <div style="border-bottom: 3px solid #1F4E79; padding-bottom: 10px; margin-bottom: 20px;">
         <div style="font-size: 24pt; font-weight: bold; color: #1F4E79;">SHOECARE HRD</div>

@@ -5,12 +5,25 @@ const COLORS = ['#3b82f6','#22c55e','#f59e0b','#a78bfa','#ef4444','#14b8a6']
 const inisial = n => n.split(' ').slice(0,2).map(w=>w[0]).join('')
 const todayStr = () => new Date().toISOString().split('T')[0]
 
+// ── FUNGSI HITUNG RADIUS MATEMATIS (HAVERSINE FORMULA) ──
+function hitungJarakMeter(lat1, lon1, lat2, lon2) {
+  const R = 6371000 // Jari-jari bumi dalam meter
+  const dLat = (lat2 - lat1) * Math.PI / 180
+  const dLon = (lon2 - lon1) * Math.PI / 180
+  const a = 
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2)
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  return R * c // Mengembalikan jarak dalam satuan meter
+}
+
 export default function Absen() {
   const [karyawan, setKaryawan] = useState([])
   const [absenMap, setAbsenMap] = useState({})
-  const [rawAbsen, setRawAbsen] = useState([]) // ← TAMBAH: Menyimpan data absensi mentah untuk riwayat
+  const [rawAbsen, setRawAbsen] = useState([])
   const [selected, setSelected] = useState(null)
   const [popup,    setPopup]    = useState(null)
+  const [gpsWarning, setGpsWarning] = useState(null) // ← BARU: State khusus untuk popup radius jauh
   const [jam,      setJam]      = useState('')
   const [error,    setError]    = useState(null)   
   const [loading,  setLoading]  = useState(true)   
@@ -35,7 +48,7 @@ export default function Absen() {
       const listAbsen    = Array.isArray(a.data) ? a.data : []
 
       setKaryawan(listKaryawan)
-      setRawAbsen(listAbsen) // ← TAMBAH: Masukkan ke state rawAbsen
+      setRawAbsen(listAbsen)
 
       const map = {}
       listAbsen.forEach(x => {
@@ -55,11 +68,50 @@ export default function Absen() {
     if (!selected) return
     const now = new Date().toTimeString().slice(0,5)
 
+    // ── LOGIKA BARU: VALIDASI RADIUS GPS KHUSUS ABSEN MASUK & KELUAR ──
+    if (type === 'masuk' || type === 'keluar') {
+      try {
+        // 📍 ATUR KOORDINAT TOKO KICK SHOES YOGYAKARTA KAMU DI SINI
+        const TOKO_LAT = -7.797068  
+        const TOKO_LNG = 110.370529 
+        const LIMIT_RADIUS = 50 // Batas maksimal toleransi (50 meter)
+
+        // Ambil koordinat GPS HP Karyawan secara real-time
+        const posisiHP = await new Promise((resolve, reject) => {
+          if (!navigator.geolocation) reject(new Error('HP tidak mendukung GPS'))
+          navigator.geolocation.getCurrentPosition(
+            (pos) => resolve(pos.coords),
+            (err) => reject(err),
+            { enableHighAccuracy: true, timeout: 8000 }
+          )
+        })
+
+        // Hitung jarak asli antara HP karyawan dengan toko
+        const jarakHasil = hitungJarakMeter(posisiHP.latitude, posisiHP.longitude, TOKO_LAT, TOKO_LNG)
+
+        // Jika jarak karyawan ke toko melompat di atas 50 meter, hadang dengan Pop-up!
+        if (jarakHasil > LIMIT_RADIUS) {
+          setGpsWarning({
+            nama: selected.nama,
+            jarak: Math.round(jarakHasil),
+            limit: LIMIT_RADIUS
+          })
+          return // 🛑 STOP JALUR: Data tidak akan pernah dikirim ke Supabase
+        }
+
+      } catch (err) {
+        console.error('Gps error:', err)
+        alert('Gagal mengunci lokasi GPS. Pastikan sensor GPS internal HP Anda sudah aktif dan berikan izin lokasi!')
+        return
+      }
+    }
+
+    // ── JALUR AMAN: (Sakit/Izin otomatis bypass ke sini, atau Masuk/Keluar yang lolos radius) ──
     try {
       await postAbsensi({
         karyawan_id: selected.id,
         tanggal:     todayStr(),
-        status:      (type === 'masuk' || type === 'keluar') ? 'hadir' : type, // ← Fix Constraint kemarin
+        status:      (type === 'masuk' || type === 'keluar') ? 'hadir' : type,
         jam_masuk:   type === 'masuk'  ? now : undefined,
         jam_keluar:  type === 'keluar' ? now : undefined,
       })
@@ -73,7 +125,7 @@ export default function Absen() {
 
       setPopup({ ...cfg[type], jam: now, nama: selected.nama })
       setSelected(null)
-      loadData() // ← Otomatis memperbarui grid dan riwayat aktivitas
+      loadData()
 
     } catch (err) {
       console.error('doAbsen error:', err)
@@ -81,7 +133,6 @@ export default function Absen() {
     }
   }
 
-  // ── LOGIKA TAMBAHAN: ME-MAP DATA ABSENSI MENJADI DAFTAR AKTIVITAS ──
   const aktifitas = []
   rawAbsen.forEach(x => {
     const k = karyawan.find(ky => ky.id === x.karyawan_id)
@@ -89,24 +140,15 @@ export default function Absen() {
     
     if (x.jam_masuk) {
       aktifitas.push({
-        id: `${x.id}-masuk`,
-        nama: namaKaryawan,
-        text: 'absen masuk',
-        icon: '↗️',
-        jam: x.jam_masuk.slice(0,5)
+        id: `${x.id}-masuk`, nama: namaKaryawan, text: 'absen masuk', icon: '↗️', jam: x.jam_masuk.slice(0,5)
       })
     }
     if (x.jam_keluar) {
       aktifitas.push({
-        id: `${x.id}-keluar`,
-        nama: namaKaryawan,
-        text: 'absen keluar',
-        icon: '↩️',
-        jam: x.jam_keluar.slice(0,5)
+        id: `${x.id}-keluar`, nama: namaKaryawan, text: 'absen keluar', icon: '↩️', jam: x.jam_keluar.slice(0,5)
       })
     }
   })
-  // Urutkan aktivitas berdasarkan jam terbaru (paling atas)
   aktifitas.sort((a, b) => b.jam.localeCompare(a.jam))
 
   const st     = selected ? absenMap[selected.id] : null
@@ -115,39 +157,29 @@ export default function Absen() {
   return (
     <div style={{ paddingBottom: 40 }}>
       
-      {/* ── 1. LOGO & TULISAN HEADLINE (TEMPAT MENGGANTINYA) ── */}
+      {/* Title */}
       <div style={{ textAlign: 'center', paddingTop: 24, paddingBottom: 10 }}>
-        
-        <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text)' }}>KICK SHOES YOGYAKARTA</div> {/* ← Ganti judul di sini */}
+        <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text)' }}>KICK SHOES YOGYAKARTA</div>
         <div style={{ fontSize: 8, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.12em', fontWeight: 600 }}>
           Shoescare Management
-        </div> {/* ← Ganti sub-judul di sini */}
+        </div>
       </div>
-      {/* ────────────────────────────────────────────────────── */}
 
       {/* Header jam */}
       <div style={{ textAlign:'center', padding:'4px 20px 4px' }}>
-        <div style={{ fontSize:38, fontWeight:700, fontFamily:'DM Mono,monospace', letterSpacing:-2 }}>
-          {jam}
-        </div>
+        <div style={{ fontSize:38, fontWeight:700, fontFamily:'DM Mono,monospace', letterSpacing:-2 }}>{jam}</div>
         <div style={{ fontSize:12, color:'var(--text3)', marginTop:4 }}>
           {new Date().toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}
         </div>
       </div>
 
-      {loading && (
-        <div style={{ textAlign:'center', padding:'32px 20px', color:'var(--text3)', fontSize:13 }}>
-          Memuat data karyawan...
-        </div>
-      )}
+      {loading && <div style={{ textAlign:'center', padding:'32px 20px', color:'var(--text3)', fontSize:13 }}>Memuat data karyawan...</div>}
 
       {!loading && error && (
         <div style={{ margin: '16px 16px 0', background: 'var(--redbg)', border: '1px solid var(--red)', borderRadius: 'var(--radius)', padding: '14px 16px' }}>
           <div style={{ fontSize:13, fontWeight:700, color:'var(--red)', marginBottom:6 }}>⚠️ Gagal memuat data</div>
           <div style={{ fontSize:12, color:'var(--text2)', marginBottom:12 }}>{error}</div>
-          <button onClick={loadData} style={{ padding: '8px 20px', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 'var(--radius-sm)', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-            🔄 Coba lagi
-          </button>
+          <button onClick={loadData} style={{ padding: '8px 20px', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 'var(--radius-sm)', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>🔄 Coba lagi</button>
         </div>
       )}
 
@@ -160,9 +192,7 @@ export default function Absen() {
 
       {!loading && !error && karyawan.length > 0 && (
         <>
-          <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '.08em', padding: '14px 20px 6px' }}>
-            Pilih karyawan
-          </p>
+          <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '.08em', padding: '14px 20px 6px' }}>Pilih karyawan</p>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, padding: '0 16px', marginBottom: 10 }}>
             {karyawan.map((k, i) => {
@@ -180,15 +210,11 @@ export default function Absen() {
                   }}>
                   {k.foto_url
                     ? <img src={k.foto_url} alt={k.nama} style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', margin: '0 auto 5px', display: 'block', border: '1px solid var(--border)' }} />
-                    : <div style={{ width: 36, height: 36, borderRadius: '50%', background: COLORS[i % COLORS.length], margin: '0 auto 5px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: '#fff' }}>
-                        {inisial(k.nama)}
-                      </div>
+                    : <div style={{ width: 36, height: 36, borderRadius: '50%', background: COLORS[i % COLORS.length], margin: '0 auto 5px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: '#fff' }}>{inisial(k.nama)}</div>
                   }
                   <div style={{ fontSize:11, fontWeight:600 }}>{k.nama.split(' ')[0]}</div>
                   <div style={{ fontSize:9, color:'var(--text3)', marginTop:1 }}>{k.shift?.nama}</div>
-                  <div style={{ fontSize: 9, fontWeight: 700, padding: '2px 5px', borderRadius: 8, marginTop: 4, display: 'inline-block', color: spColor }}>
-                    {st || 'Belum'}
-                  </div>
+                  <div style={{ fontSize: 9, fontWeight: 700, padding: '2px 5px', borderRadius: 8, marginTop: 4, display: 'inline-block', color: spColor }}>{st || 'Belum'}</div>
                 </div>
               )
             })}
@@ -198,9 +224,7 @@ export default function Absen() {
           {selected && (
             <div style={{ margin: '0 16px 12px', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 14 }}>
               <div style={{ fontSize:14, fontWeight:700 }}>{selected.nama}</div>
-              <div style={{ fontSize:11, color:'var(--text3)', marginBottom:12 }}>
-                {selected.shift?.nama} · {selected.shift?.jam_masuk} – {selected.shift?.jam_keluar}
-              </div>
+              <div style={{ fontSize:11, color:'var(--text3)', marginBottom:12 }}>{selected.shift?.nama} · {selected.shift?.jam_masuk} – {selected.shift?.jam_keluar}</div>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
                 {[
                   { type:'masuk',  label:'↗ Absen Masuk',  disabled:locked||st==='hadir', bg:'var(--green)',  color:'#fff'          },
@@ -217,18 +241,13 @@ export default function Absen() {
             </div>
           )}
 
-          {/* ── 2. SECTION RIWAYAT AKTIVITAS (LOG BARU) ── */}
+          {/* Riwayat Aktivitas */}
           {aktifitas.length > 0 && (
             <div style={{ padding: '10px 16px 0' }}>
-              <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 8 }}>
-                Aktivitas Hari Ini
-              </p>
+              <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 8 }}>Aktivitas Hari Ini</p>
               <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '6px 14px', display: 'flex', flexDirection: 'column' }}>
                 {aktifitas.map((act, index) => (
-                  <div key={act.id} style={{ 
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0',
-                    borderBottom: index === aktifitas.length - 1 ? 'none' : '1px solid var(--border)' 
-                  }}>
+                  <div key={act.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: index === aktifitas.length - 1 ? 'none' : '1px solid var(--border)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
                       <span>{act.icon}</span>
                       <div>
@@ -236,33 +255,48 @@ export default function Absen() {
                         <span style={{ color: 'var(--text2)' }}>{act.text}</span>
                       </div>
                     </div>
-                    <div style={{ fontFamily: 'DM Mono, monospace', color: 'var(--text3)', fontSize: 12, fontWeight: 600 }}>
-                      {act.jam}
-                    </div>
+                    <div style={{ fontFamily: 'DM Mono, monospace', color: 'var(--text3)', fontSize: 12, fontWeight: 600 }}>{act.jam}</div>
                   </div>
                 ))}
               </div>
             </div>
           )}
-          {/* ────────────────────────────────────────────── */}
         </>
       )}
 
-      {/* Popup konfirmasi */}
+      {/* Popup konfirmasi Sukses */}
       {popup && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.65)', zIndex: 500, display: 'flex', alignItems: 'center', justifyCenter: 'center' }} onClick={() => setPopup(null)}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.65)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setPopup(null)}>
           <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 20, padding: '28px 24px', width: 'calc(100% - 48px)', maxWidth: 340, textAlign: 'center', margin: 'auto' }} onClick={e => e.stopPropagation()}>
             <div style={{ fontSize:40, marginBottom:12 }}>{popup.icon}</div>
             <div style={{ fontSize:17, fontWeight:800, marginBottom:6 }}>{popup.title}</div>
             <div style={{ fontSize:12, color:'var(--text2)', marginBottom:8 }}>{popup.sub}</div>
             <div style={{ fontSize:28, fontWeight:700, fontFamily:'DM Mono,monospace', margin:'8px 0' }}>{popup.jam}</div>
             <div style={{ fontSize:13, color:'var(--text2)', marginBottom:18 }}>{popup.nama}</div>
-            <button onClick={() => setPopup(null)} style={{ width: '100%', padding: 12, background: popup.warna, color: '#fff', border: 'none', borderRadius: 'var(--radius-sm)', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-              OK, Tutup
+            <button onClick={() => setPopup(null)} style={{ width: '100%', padding: 12, background: popup.warna, color: '#fff', border: 'none', borderRadius: 'var(--radius-sm)', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>OK, Tutup</button>
+          </div>
+        </div>
+      )}
+
+      {/* ── BARU: POPUP WARNING APABILA RADIUS TERLALU JAUH (TEMA MERAH ALERT) ── */}
+      {gpsWarning && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.75)', zIndex: 600, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setGpsWarning(null)}>
+          <div style={{ background: 'var(--bg2)', border: '2px solid var(--red)', borderRadius: 20, padding: '32px 24px', width: 'calc(100% - 48px)', maxWidth: 340, textAlign: 'center', margin: 'auto' }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 44, marginBottom: 12 }}>📍❌</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--red)', marginBottom: 6 }}>Absen Gagal! Jarak Terlalu Jauh</div>
+            <div style={{ fontSize: 13, color: 'var(--text)', marginBottom: 14 }}>
+              Halo <b>{gpsWarning.nama}</b>, Anda terdeteksi berada sejauh <span style={{ color: 'var(--red)', fontWeight: 700 }}>{gpsWarning.jarak} meter</span> dari toko Kick Shoes Yogyakarta.
+            </div>
+            <div style={{ fontSize: 11, background: 'var(--redbg)', color: 'var(--red)', padding: '8px 12px', borderRadius: 8, marginBottom: 20, fontWeight: 600 }}>
+              Maksimal radius yang diizinkan: {gpsWarning.limit} meter. Silakan mendekat ke area kasir/toko!
+            </div>
+            <button onClick={() => setGpsWarning(null)} style={{ width: '100%', padding: 12, background: 'var(--red)', color: '#fff', border: 'none', borderRadius: 'var(--radius-sm)', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+              Saya Paham, Tutup
             </button>
           </div>
         </div>
       )}
+
     </div>
   )
 }
