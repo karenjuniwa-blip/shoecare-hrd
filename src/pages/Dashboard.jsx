@@ -179,7 +179,7 @@ export default function Dashboard() {
           onClick={() => navigate('/tambah')}
           style={{ display:'flex', alignItems:'center', gap:5, background:'var(--accent)', color:'#fff', border:'none', borderRadius:'var(--radius-sm)', padding:'6px 14px', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}
         >
-          + Tambay
+          + Tambah
         </button>
       </div>
 
