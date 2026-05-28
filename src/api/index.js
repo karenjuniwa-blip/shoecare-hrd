@@ -9,6 +9,10 @@ function check(error, data) {
   return { data }
 }
 
+// Ganti fungsi getAbsensiBulan lama dengan memanggil VIEW
+export const getRingkasanAbsen = (id, b, t) => 
+  api.get(`/rekap_absensi_karyawan?karyawan_id=eq.${id}&bulan=eq.${b}&tahun=eq.${t}`)
+  
 // ─── Helper format rupiah ─────────────────────────────────────
 export const rupiah = (n) =>
   'Rp ' + Math.round(n || 0).toLocaleString('id-ID')
