@@ -74,7 +74,7 @@ export default function Absen() {
         // 📍 ATUR KOORDINAT TOKO KICK SHOES YOGYAKARTA KAMU DI SINI
         const TOKO_LAT = -7.7717731
         const TOKO_LNG = 110.3989606 
-        const LIMIT_RADIUS = 50 // Batas maksimal toleransi (50 meter)
+        const LIMIT_RADIUS = 1000 // Batas maksimal toleransi (50 meter)
 
         // Ambil koordinat GPS HP Karyawan secara real-time
         const posisiHP = await new Promise((resolve, reject) => {
