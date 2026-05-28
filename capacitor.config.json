@@ -1,0 +1,8 @@
+{
+    "appId": "com.shoecare.hrd",
+    "appName": "ShoeCare HRD",
+    "webDir": "dist",
+    "server": {
+      "cleartext": true
+    }
+  }
