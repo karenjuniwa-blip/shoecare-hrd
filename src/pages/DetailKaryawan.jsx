@@ -99,7 +99,7 @@ export default function DetailKaryawan() {
   }
 
   const cycleJadwal = i => {
-    const j = [...jadwal]; j[i] = (j[i]+1)%3; setJadwal(j)
+    const j = [...jadwal]; j[i] = (j[i]+1)%4; setJadwal(j)
   }
 
   if (!k) return <div style={{padding:40,textAlign:'center',color:'var(--text3)'}}>Memuat...</div>
@@ -269,15 +269,21 @@ export default function DetailKaryawan() {
           </button>
         </div>
 
-        {/* Jadwal shift */}
-        <p style={{fontSize:11,fontWeight:600,color:'var(--text3)',textTransform:'uppercase',letterSpacing:'.08em',padding:'14px 20px 6px'}}>Jadwal Shift Mingguan</p>
+       {/* Jadwal shift */}
+       <p style={{fontSize:11,fontWeight:600,color:'var(--text3)',textTransform:'uppercase',letterSpacing:'.08em',padding:'14px 20px 6px'}}>Jadwal Shift Mingguan</p>
         <div style={{background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:16,margin:'0 16px 24px'}}>
           <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:4}}>
             {HARI.map((h,i) => {
               const v   = jadwal[i]
-              const cfg = [{bg:'var(--accentbg,#1e2d4a)',bc:'var(--accent)',c:'var(--accent)',l:'S1'},
-                           {bg:'var(--amberbg)',bc:'var(--amber)',c:'var(--amber)',l:'S2'},
-                           {bg:'var(--redbg)',bc:'var(--red)',c:'var(--red)',l:'L'}][v]
+              
+              // Menambahkan list warna dan teks untuk Shift 3 (S3)
+              const cfg = [
+                {bg:'var(--accentbg,#1e2d4a)', bc:'var(--accent)', c:'var(--accent)', l:'S1'},
+                {bg:'var(--amberbg)', bc:'var(--amber)', c:'var(--amber)', l:'S2'},
+                {bg:'rgba(167,139,250,0.15)', bc:'var(--purple,#a78bfa)', c:'var(--purple,#a78bfa)', l:'S3'}, // S3 Ungu
+                {bg:'var(--redbg)', bc:'var(--red)', c:'var(--red)', l:'L'}
+              ][v] || {bg:'var(--bg3)', bc:'var(--border)', c:'var(--text3)', l:'-'}
+
               return (
                 <div key={h} style={{textAlign:'center'}}>
                   <div style={{fontSize:9,color:'var(--text3)',fontWeight:600,marginBottom:4}}>{h}</div>
@@ -287,7 +293,12 @@ export default function DetailKaryawan() {
             })}
           </div>
           <div style={{display:'flex',gap:12,marginTop:10,flexWrap:'wrap'}}>
-            {[{l:'Shift 1',c:'var(--accent)'},{l:'Shift 2',c:'var(--amber)'},{l:'Libur',c:'var(--red)'}].map(x=>(
+            {[
+              {l:'Shift 1', c:'var(--accent)'},
+              {l:'Shift 2', c:'var(--amber)'},
+              {l:'Shift 3', c:'var(--purple,#a78bfa)'}, // Keterangan Shift 3
+              {l:'Libur', c:'var(--red)'}
+            ].map(x=>(
               <div key={x.l} style={{display:'flex',alignItems:'center',gap:5,fontSize:10,color:'var(--text3)'}}>
                 <div style={{width:10,height:10,borderRadius:3,background:x.c}}/>{x.l}
               </div>
