@@ -17,7 +17,11 @@ export const updateKaryawan  = (id, body)   => api.put(`/karyawan?id=eq.${id}`, 
 // ── ABSENSI ───────────────────────────────
 export const getAbsensi      = (tanggal)    => api.get('/absensi', { params: { tanggal: `eq.${tanggal}` } })
 export const getAbsensiBulan = (id, b, t)   => api.get('/absensi', { params: { karyawan_id: `eq.${id}`, bulan: `eq.${b}`, tahun: `eq.${t}` } })
-export const postAbsensi     = (body)       => api.post('/absensi', body)
+export const postAbsensi     = (body)       => api.post('/absensi', body, {
+  headers: {
+    'Prefer': 'resolution=merge-duplicates'
+  }
+})
 
 // ── PASANG ────────────────────────────────
 export const getPasang       = (tanggal)    => api.get('/pasang', { params: { tanggal: `eq.${tanggal}` } })
