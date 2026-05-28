@@ -13,9 +13,9 @@ export async function unduhExcelHRD(dataKaryawan, periodeBulan, periodeTahun) {
   const ws1 = workbook.addWorksheet('Ringkasan Dashboard')
   ws1.views = [{ showGridLines: true }]
   
-  ws1.cell('A1').value = "ShoeCare HRD - Laporan Eksekutif Bulanan"
+  ws1.cell('A1').value = "Kick Shoes Yogyakarta - Laporan Eksekutif Bulanan"
   ws1.cell('A1').font = { name: 'Arial', size: 16, bold: true, color: { argb: '1F4E79' } }
-  ws1.cell('A2').value = `Periode: ${periodeBulan} ${periodeTahun} | Toko Utama ShoeCare`
+  ws1.cell('A2').value = `Periode: ${periodeBulan} ${periodeTahun} | Kick Shoes`
   ws1.cell('A2').font = { name: 'Arial', size: 10, italic: true }
 
   // Hitung total ringkasan
@@ -117,7 +117,7 @@ export function unduhPdfHRD(dataKaryawan, periodeBulan, periodeTahun) {
   const elementHtmlLaporan = `
     <div style="font-family: 'Arial', sans-serif; padding: 20px; color: #2c3e50;">
       <div style="border-bottom: 3px solid #1F4E79; padding-bottom: 10px; margin-bottom: 20px;">
-        <div style="font-size: 24pt; font-weight: bold; color: #1F4E79;">SHOECARE HRD</div>
+        <div style="font-size: 24pt; font-weight: bold; color: #1F4E79;">KICK SHOES YOGYAKARTA</div>
         <div style="font-size: 11pt; color: #7f8c8d; margin-top: 5px; text-transform: uppercase; letter-spacing: 1px;">Laporan Rekapitulasi Bulanan Kehadiran & Penggajian</div>
       </div>
 
@@ -163,8 +163,8 @@ export function unduhPdfHRD(dataKaryawan, periodeBulan, periodeTahun) {
 
       <table style="width: 100%; margin-top: 50px; font-size: 10pt;">
         <tr>
-          <td>Disetujui Oleh,<br><br><br><br><br>____________________<br><b>Owner ShoeCare</b></td>
-          <td style="text-align: right;">Yogyakarta, ${tanggalHariIni}<br>Dibuat Oleh,<br><br><br><br><br>____________________<br><b>Sistem HRD Cloud</b></td>
+          <td>Disetujui Oleh,<br><br><br><br><br>____________________<br><b>Owner Kick Shoes</b></td>
+          <td style="text-align: right;">Yogyakarta, ${tanggalHariIni}<br>Dibuat Oleh,<br><br><br><br><br>____________________<br><b>Staffora HR System</b></td>
         </tr>
       </table>
     </div>
