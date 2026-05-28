@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getKaryawan, getAbsensi, rupiah } from '../api'
 import { useAdmin } from '../hooks/useAdmin'
+import { unduhExcelHRD, unduhPdfHRD } from '../utils/ekspor'
 import PinLock from '../components/PinLock'
 
 // ── PERBAIKAN 1: Mengembalikan Array COLORS (Termudah, No Internet) ──
@@ -71,6 +72,30 @@ export default function Dashboard() {
     s + (k.jabatan?.gaji_pokok || 0) + (k.jabatan?.tunjangan || 0)
   , 0)
 
+  // Fungsi pembantu untuk memproses cetak data bulanan secara aman
+  const tanganiEkspor = (jenis) => {
+    const namaBulan = new Date().toLocaleString('id-ID', { month: 'long' })
+    const tahunIni = new Date().getFullYear().toString()
+    
+    // Pemetaan data mentah dashboard agar sesuai struktur kolom laporan ekspor
+    const dataFormatted = karyawan.map(k => ({
+      nama: k.nama,
+      jabatan: k.jabatan,
+      total_hadir: absenMap[k.id] === 'hadir' ? 1 : 0,
+      total_izin_sakit: ['sakit','izin'].includes(absenMap[k.id]) ? 1 : 0,
+      gaji_pokok: k.jabatan?.gaji_pokok || 0,
+      tunjangan: k.jabatan?.tunjangan || 0,
+      bonus_pasang: 0, // Parameter fallback harian awal
+      gaji_bersih: (k.jabatan?.gaji_pokok || 0) + (k.jabatan?.tunjangan || 0)
+    }))
+
+    if (jenis === 'excel') {
+      unduhExcelHRD(dataFormatted, namaBulan, tahunIni)
+    } else {
+      unduhPdfHRD(dataFormatted, namaBulan, tahunIni)
+    }
+  }
+
   // Tampilan PIN Lock (Keamanan: Tetap terjaga)
   if (showPin) {
     return (
@@ -133,6 +158,22 @@ export default function Dashboard() {
         ))}
       </div>
 
+      {/* ── TOMBOL EKSPOR LAPORAN REKAPITULASI (BARU) ── */}
+      <div style={{ display:'flex', gap:10, padding:'12px 16px 4px' }}>
+        <button
+          onClick={() => tanganiEkspor('excel')}
+          style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:6, padding:'10px', background:'#22c55e', color:'#fff', border:'none', borderRadius:'var(--radius-sm)', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}
+        >
+          📊 Unduh Excel
+        </button>
+        <button
+          onClick={() => tanganiEkspor('pdf')}
+          style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:6, padding:'10px', background:'#ef4444', color:'#fff', border:'none', borderRadius:'var(--radius-sm)', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}
+        >
+          📄 Unduh PDF
+        </button>
+      </div>
+
       {/* Daftar karyawan */}
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'14px 20px 6px' }}>
         <p style={{ fontSize:11, fontWeight:600, color:'var(--text3)', textTransform:'uppercase', letterSpacing:'.08em' }}>
@@ -159,12 +200,11 @@ export default function Dashboard() {
             >
               
               {/* ── PERBAIKAN 3: KEMBALI KE BENTUK PALING SEDERHANA (Inisial Berwarna) ── */}
-              {/* Ini adalah bentuk paling mandiri, tidak butuh internet untuk memuat */}
               <div style={{
                 width:34,
                 height:34,
                 borderRadius:'50%',
-                background:COLORS[i % COLORS.length], // Index warna acak
+                background:COLORS[i % COLORS.length],
                 display:'flex',
                 alignItems:'center',
                 justifyContent:'center',
@@ -175,7 +215,6 @@ export default function Dashboard() {
               }}>
                 {inisial(k.nama)}
               </div>
-              {/* ─────────────────────────────────────────────────────────────────── */}
 
               <div style={{ flex:1, minWidth:0 }}>
                 <div style={{ fontSize:13, fontWeight:600 }}>{k.nama}</div>
