@@ -25,12 +25,13 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+        maximumFileSizeToCacheInBytes: 4194304, // 👈 TAMBAHKAN BARIS INI (Batas 4 MB)
         runtimeCaching: [{
           urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
           handler: 'NetworkFirst',
           options: { cacheName: 'supabase-cache' }
         }]
-      }
+      } // Pastikan penutup kurung kurawalnya rapi ya!
     })
   ]
 })
