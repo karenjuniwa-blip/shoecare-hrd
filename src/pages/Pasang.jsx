@@ -12,48 +12,54 @@ const toStr   = d => d.toISOString().split('T')[0]
 
 export default function Pasang() {
   const today = new Date()
+  const navigate = useNavigate() // 👈 FIX: Penempatan hooks rapi di atas
+  const { isAdmin } = useAdmin() 
+  const [showPin, setShowPin] = useState(!isAdmin)
+
   const [selDate,   setSelDate]   = useState(today)
   const [calMonth,  setCalMonth]  = useState(new Date(today.getFullYear(), today.getMonth(), 1))
   const [karyawan,  setKaryawan]  = useState([])
-  const [pasangMap, setPasangMap] = useState({}) // {karyawan_id: {jumlah, bonus}}
+  const [pasangMap, setPasangMap] = useState({}) 
   const [cfg,       setCfg]       = useState({ target_pasang:'5', bonus_per_pasang:'5000' })
 
-  export default function Pasang() { // Atau nama fungsi Pengaturan
-    const navigate = useNavigate()
-    const { isAdmin } = useAdmin()
-    const [showPin, setShowPin] = useState(!isAdmin)
-  
-    // ── JIKA BELUM MEMASUKKAN PIN, TAMPILKAN LAYAR GEMBOK ──
-    if (showPin) {
-      return (
-        <>
-          <div style={{ textAlign:'center', padding:'60px 20px' }}>
-            <div style={{ fontSize:48, marginBottom:16 }}>🔒</div>
-            <div style={{ fontSize:18, fontWeight:700, marginBottom:8 }}>Halaman Terkunci</div>
-            <div style={{ fontSize:13, color:'var(--text3)', marginBottom:24 }}>
-              Masukkan PIN admin untuk mengakses menu ini
-            </div>
-            <button
-              onClick={() => setShowPin(true)}
-              style={{ padding:'13px 32px', background:'var(--accent)', color:'#fff', border:'none', borderRadius:'var(--radius)', fontSize:14, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}
-            >
-              🔑 Masukkan PIN
-            </button>
+  // ── FIX: LOGIKA GEMBOK PIN YANG BENAR UNTUK PASANG ──
+  if (showPin) {
+    return (
+      <>
+        <div style={{ textAlign:'center', padding:'60px 20px' }}>
+          <div style={{ fontSize:48, marginBottom:16 }}>🔒</div>
+          <div style={{ fontSize:18, fontWeight:700, marginBottom:8 }}>Halaman Terkunci</div>
+          <div style={{ fontSize:13, color:'var(--text3)', marginBottom:24 }}>
+            Masukkan PIN admin untuk mengakses menu input pasang harian
           </div>
-          <PinLock
-            onSuccess={() => setShowPin(false)}
-            onCancel={() => navigate('/absen')} // Jika batal, tendang balik ke menu absen
-          />
-        </>
-      )
-    }
+          <button
+            onClick={() => setShowPin(true)}
+            style={{ padding:'13px 32px', background:'var(--accent)', color:'#fff', border:'none', borderRadius:'var(--radius)', fontSize:14, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}
+          >
+            🔑 Masukkan PIN
+          </button>
+        </div>
+        <PinLock
+          onSuccess={() => setShowPin(false)}
+          onCancel={() => navigate('/absen')}
+        />
+      </>
+    )
+  }
 
+  // ── Jalankan load data hanya jika PIN aman ──
   useEffect(() => {
-    getKaryawan().then(r => setKaryawan(r.data))
-    getPengaturan().then(r => setCfg(r.data))
-  }, [])
+    if (!showPin) {
+      getKaryawan().then(r => setKaryawan(r.data))
+      getPengaturan().then(r => setCfg(r.data))
+    }
+  }, [showPin])
 
-  useEffect(() => { loadPasang() }, [selDate])
+  useEffect(() => { 
+    if (!showPin) {
+      loadPasang() 
+    }
+  }, [selDate, showPin])
 
   async function loadPasang() {
     const r = await getPasang(toStr(selDate))
@@ -69,7 +75,6 @@ export default function Pasang() {
     loadPasang()
   }
 
-  // Build kalender
   const minDate = new Date(today); minDate.setDate(today.getDate()-30)
   const y = calMonth.getFullYear(), m = calMonth.getMonth()
   const firstDow = (new Date(y,m,1).getDay()+6)%7
