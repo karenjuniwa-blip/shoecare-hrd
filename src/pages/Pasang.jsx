@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react'
 import { getKaryawan, getPasang, postPasang, getPengaturan, rupiah } from '../api'
+import { useNavigate } from 'react-router-dom'
+import { useAdmin } from '../hooks/useAdmin'
+import PinLock from '../components/PinLock'
 
 const COLORS  = ['#3b82f6','#22c55e','#f59e0b','#a78bfa','#ef4444','#14b8a6']
 const HARI_S  = ['Sen','Sel','Rab','Kam','Jum','Sab','Min']
@@ -14,6 +17,36 @@ export default function Pasang() {
   const [karyawan,  setKaryawan]  = useState([])
   const [pasangMap, setPasangMap] = useState({}) // {karyawan_id: {jumlah, bonus}}
   const [cfg,       setCfg]       = useState({ target_pasang:'5', bonus_per_pasang:'5000' })
+
+  export default function Pasang() { // Atau nama fungsi Pengaturan
+    const navigate = useNavigate()
+    const { isAdmin } = useAdmin()
+    const [showPin, setShowPin] = useState(!isAdmin)
+  
+    // ── JIKA BELUM MEMASUKKAN PIN, TAMPILKAN LAYAR GEMBOK ──
+    if (showPin) {
+      return (
+        <>
+          <div style={{ textAlign:'center', padding:'60px 20px' }}>
+            <div style={{ fontSize:48, marginBottom:16 }}>🔒</div>
+            <div style={{ fontSize:18, fontWeight:700, marginBottom:8 }}>Halaman Terkunci</div>
+            <div style={{ fontSize:13, color:'var(--text3)', marginBottom:24 }}>
+              Masukkan PIN admin untuk mengakses menu ini
+            </div>
+            <button
+              onClick={() => setShowPin(true)}
+              style={{ padding:'13px 32px', background:'var(--accent)', color:'#fff', border:'none', borderRadius:'var(--radius)', fontSize:14, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}
+            >
+              🔑 Masukkan PIN
+            </button>
+          </div>
+          <PinLock
+            onSuccess={() => setShowPin(false)}
+            onCancel={() => navigate('/absen')} // Jika batal, tendang balik ke menu absen
+          />
+        </>
+      )
+    }
 
   useEffect(() => {
     getKaryawan().then(r => setKaryawan(r.data))

@@ -4,6 +4,7 @@ import { getPengaturan, savePengaturan,
          getShift, createShift, updateShift, deleteShift,
          rupiah } from '../api'
 import { useAdmin } from '../hooks/useAdmin'
+import PinLock from '../components/PinLock'
 
 // ─── Komponen Accordion ─────────────────────────────────────
 function Accordion({ title, sub, children }) {
@@ -114,6 +115,37 @@ export default function Pengaturan() {
   const [pinBaru,    setPinBaru]    = useState('')
   const [pinKonfirm, setPinKonfirm] = useState('')
   const [pinMsg,     setPinMsg]     = useState('')
+
+  export default function Pasang() { // Atau nama fungsi Pengaturan
+    const navigate = useNavigate()
+    const { isAdmin } = useAdmin()
+    const [showPin, setShowPin] = useState(!isAdmin)
+  
+    // ── JIKA BELUM MEMASUKKAN PIN, TAMPILKAN LAYAR GEMBOK ──
+    if (showPin) {
+      return (
+        <>
+          <div style={{ textAlign:'center', padding:'60px 20px' }}>
+            <div style={{ fontSize:48, marginBottom:16 }}>🔒</div>
+            <div style={{ fontSize:18, fontWeight:700, marginBottom:8 }}>Halaman Terkunci</div>
+            <div style={{ fontSize:13, color:'var(--text3)', marginBottom:24 }}>
+              Masukkan PIN admin untuk mengakses menu ini
+            </div>
+            <button
+              onClick={() => setShowPin(true)}
+              style={{ padding:'13px 32px', background:'var(--accent)', color:'#fff', border:'none', borderRadius:'var(--radius)', fontSize:14, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}
+            >
+              🔑 Masukkan PIN
+            </button>
+          </div>
+          <PinLock
+            onSuccess={() => setShowPin(false)}
+            onCancel={() => navigate('/absen')} // Jika batal, tendang balik ke menu absen
+          />
+        </>
+      )
+    }
+
 
   // ── Load data ────────────────────────────────────────────
   useEffect(() => {
