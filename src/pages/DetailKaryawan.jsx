@@ -58,16 +58,17 @@ export default function DetailKaryawan() {
    setJabList(jRes.data)
    setCfg(cfgRes.data)
    
-   if (cfgRes.data?.shifts) {
-     setShifts(cfgRes.data.shifts)
-   } else {
-     setShifts(cfgRes.data?.master_shifts || [])
-   }
+   const masterShiftsRaw = cfgRes.data?.shifts || cfgRes.data?.master_shifts || []
+   setShifts(masterShiftsRaw)
    
    setEditNama(kRes.data.nama)
    setEditJab(kRes.data.jabatan_id)
    setEditShift(kRes.data.shift_id)
-   setJadwal(kRes.data.jadwal_mingguan || [0,0,0,0,0,1,2])
+   
+   const jadwalKaryawan = kRes.data.jadwal_mingguan || [0,0,0,0,0,1,2]
+   setJadwal(jadwalKaryawan)
+   
+   // Teruskan data masterShiftsRaw & jadwalKaryawan langsung agar kalkulasi rekap tidak bernilai default 07:00
    loadRekap(bulan, tahun, aRes.data)
  }
 
@@ -113,8 +114,7 @@ export default function DetailKaryawan() {
  // Mencari shift dinamis khusus hari ini 
  const hariIniIndex = (now.getDay() === 0) ? 6 : now.getDay() - 1 
  const shiftHariIniIdx = jadwal[hariIniIndex] 
- const listShiftsMaster = cfg.shifts || []
- const activeShiftHariIni = listShiftsMaster[shiftHariIniIdx]
+ const activeShiftHariIni = shifts[shiftHariIniIdx]
 
  const ring     = absen.ringkasan
  const total    = ring.hadir+ring.sakit+ring.izin+ring.libur
@@ -123,11 +123,10 @@ export default function DetailKaryawan() {
  const toleransi   = parseInt(cfg.toleransi_telat) || 15
  const defaultJamIn = "07:00"
 
- // FIX LOGIKA: Membaca indeks hari berdasarkan penanggalan lokal aman (Anti-bias UTC)
+ // FIX LOGIKA UTAMA: Membaca batas jam masuk secara dinamis berdasarkan data master shifts terbaru
  function getBatasJamMasukByTanggal(tglStr) {
-   if (!tglStr || listShiftsMaster.length === 0) return defaultJamIn
+   if (!tglStr || shifts.length === 0) return defaultJamIn
    
-   // Pecah string "YYYY-MM-DD" agar dibaca sebagai tanggal lokal, bukan UTC murni
    const parts = tglStr.split('-')
    if (parts.length !== 3) return defaultJamIn
    
@@ -135,8 +134,8 @@ export default function DetailKaryawan() {
    const idxHari = (d.getDay() === 0) ? 6 : d.getDay() - 1
    const idxShift = jadwal[idxHari]
    
-   if (idxShift === 3 || !listShiftsMaster[idxShift]) return defaultJamIn 
-   return listShiftsMaster[idxShift].jam_masuk || defaultJamIn
+   if (idxShift === 3 || !shifts[idxShift]) return "Libur" 
+   return shifts[idxShift].jam_masuk || defaultJamIn
  }
 
  const detailList = (rekapData?.detail || []).sort((a,b) => a.tanggal > b.tanggal ? 1 : -1)
@@ -145,10 +144,12 @@ export default function DetailKaryawan() {
  detailList.forEach(d => {
    if (d.jam_masuk && d.status === 'hadir') {
      const batasJamInTanggal = getBatasJamMasukByTanggal(d.tanggal)
-     const selisih = selisihMenit(d.jam_masuk, batasJamInTanggal)
-     if (selisih > toleransi) {
-       telat++
-       totalMenitTelat += selisih
+     if (batasJamInTanggal !== "Libur") {
+       const selisih = selisihMenit(d.jam_masuk, batasJamInTanggal)
+       if (selisih > toleransi) {
+         telat++
+         totalMenitTelat += selisih
+       }
      }
    }
  })
@@ -216,7 +217,7 @@ export default function DetailKaryawan() {
      </div>
 
      <div style={{display:'flex',borderBottom:'1px solid var(--border)',margin:'0 0 0'}}>
-       {[{id:'ringl_panel',id:'ringkasan',label:'Ringkasan'},{id:'rekap',label:'Rekap Absen'}].map(t => (
+       {[{id:'ringkasan',label:'Ringkasan'},{id:'rekap',label:'Rekap Absen'}].map(t => (
          <button key={t.id} onClick={() => setTab(t.id)} style={{
            flex:1, padding:'12px 0', background:'none', border:'none',
            borderBottom: tab===t.id ? '2px solid var(--accent)' : '2px solid transparent',
@@ -390,7 +391,7 @@ export default function DetailKaryawan() {
          const ss       = statusStyle(d.status)
          const batasJamInTanggal = getBatasJamMasukByTanggal(d.tanggal)
          const selisih  = d.jam_masuk ? selisihMenit(d.jam_masuk, batasJamInTanggal) : 0
-         const isTelat  = d.status === 'hadir' && selisih > toleransi
+         const isTelat  = d.status === 'hadir' && batasJamInTanggal !== "Libur" && selisih > toleransi
 
          return (
            <div key={i} style={{
