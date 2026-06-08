@@ -56,19 +56,19 @@ export default function DetailKaryawan() {
    setAbsen(aRes.data)
    setGaji(gRes.data)
    setJabList(jRes.data)
-   setCfg(cfgRes.data)
    
-   const masterShiftsRaw = cfgRes.data?.shifts || cfgRes.data?.master_shifts || []
+   // FIX AKAR MASALAH: Antisipasi jika format respons dari Supabase dibungkus dalam bentuk Array list
+   const configData = Array.isArray(cfgRes.data) ? cfgRes.data[0] : cfgRes.data
+   setCfg(configData || {})
+   
+   const masterShiftsRaw = configData?.shifts || configData?.master_shifts || []
    setShifts(masterShiftsRaw)
    
    setEditNama(kRes.data.nama)
    setEditJab(kRes.data.jabatan_id)
    setEditShift(kRes.data.shift_id)
+   setJadwal(kRes.data.jadwal_mingguan || [0,0,0,0,0,1,2])
    
-   const jadwalKaryawan = kRes.data.jadwal_mingguan || [0,0,0,0,0,1,2]
-   setJadwal(jadwalKaryawan)
-   
-   // Teruskan data masterShiftsRaw & jadwalKaryawan langsung agar kalkulasi rekap tidak bernilai default 07:00
    loadRekap(bulan, tahun, aRes.data)
  }
 
@@ -111,7 +111,6 @@ export default function DetailKaryawan() {
 
  if (!k) return <div style={{padding:40,textAlign:'center',color:'var(--text3)'}}>Memuat...</div>
 
- // Mencari shift dinamis khusus hari ini 
  const hariIniIndex = (now.getDay() === 0) ? 6 : now.getDay() - 1 
  const shiftHariIniIdx = jadwal[hariIniIndex] 
  const activeShiftHariIni = shifts[shiftHariIniIdx]
@@ -121,11 +120,12 @@ export default function DetailKaryawan() {
  const hadirPct = total > 0 ? Math.round(ring.hadir/total*100) : 0
 
  const toleransi   = parseInt(cfg.toleransi_telat) || 15
- const defaultJamIn = "07:00"
+ // Cadangan jika master shift kosong, gunakan shift bawaan dari profil karyawan tersebut
+ const defaultJamIn = k.shift?.jam_masuk || "07:00"
 
- // FIX LOGIKA UTAMA: Membaca batas jam masuk secara dinamis berdasarkan data master shifts terbaru
+ // FIX LOGIKA TOTAL: Mengambil batas jam masuk dinamis dengan double-protection fallback
  function getBatasJamMasukByTanggal(tglStr) {
-   if (!tglStr || shifts.length === 0) return defaultJamIn
+   if (!tglStr) return defaultJamIn
    
    const parts = tglStr.split('-')
    if (parts.length !== 3) return defaultJamIn
@@ -134,8 +134,15 @@ export default function DetailKaryawan() {
    const idxHari = (d.getDay() === 0) ? 6 : d.getDay() - 1
    const idxShift = jadwal[idxHari]
    
-   if (idxShift === 3 || !shifts[idxShift]) return "Libur" 
-   return shifts[idxShift].jam_masuk || defaultJamIn
+   if (idxShift === 3) return "Libur"
+   
+   // Jalur Utama: Ambil dari master shifts pengaturan sistem
+   if (shifts.length > 0 && shifts[idxShift]) {
+     return shifts[idxShift].jam_masuk || defaultJamIn
+   }
+   
+   // Jalur Cadangan: Jika database array shifts kosong, gunakan data object shift personal karyawan
+   return defaultJamIn
  }
 
  const detailList = (rekapData?.detail || []).sort((a,b) => a.tanggal > b.tanggal ? 1 : -1)
@@ -209,10 +216,10 @@ export default function DetailKaryawan() {
        }
        <div style={{fontSize:19,fontWeight:800}}>{k.nama}</div>
        <div style={{fontSize:12,color:'var(--text3)',marginTop:2}}>
-         {k.jabatan?.nama} · {shiftHariIniIdx === 3 ? 'Libur' : (activeShiftHariIni?.nama || 'Shift Kerja')}
+         {k.jabatan?.nama} · {shiftHariIniIdx === 3 ? 'Libur' : (activeShiftHariIni?.nama || k.shift?.nama || 'Shift Kerja')}
        </div>
        <div style={{fontSize:11,color:'var(--text3)',marginTop:4}}>
-         Jadwal Hari Ini: {shiftHariIniIdx === 3 ? 'Bebas Tugas' : `${activeShiftHariIni?.jam_masuk || '--:--'} – ${activeShiftHariIni?.jam_keluar || '--:--'}`} · Toleransi telat {toleransi} mnt
+         Jadwal Hari Ini: {shiftHariIniIdx === 3 ? 'Bebas Tugas' : `${activeShiftHariIni?.jam_masuk || defaultJamIn} – ${activeShiftHariIni?.jam_keluar || k.shift?.jam_keluar || '--:--'}`} · Toleransi telat {toleransi} mnt
        </div>
      </div>
 
@@ -318,7 +325,7 @@ export default function DetailKaryawan() {
 
              return (
                <div key={h} style={{textAlign:'center'}}>
-                 <div style={{fontSize:9,color:'var(--text3)',fontWeight:600,marginBottom:4}}>{h}</div>
+                 <div style={{fontSize:9,color(--text3)',fontWeight:600,marginBottom:4}}>{h}</div>
                  <button onClick={() => cycleJadwal(i)} style={{width:34,height:34,borderRadius:8,border:`1.5px solid ${buttonCfg.bc}`,background:buttonCfg.bg,color:buttonCfg.c,cursor:'pointer',fontSize:9,fontWeight:700,fontFamily:'inherit'}}>{buttonCfg.l}</button>
                </div>
              )
