@@ -381,7 +381,7 @@ export default function DetailKaryawan() {
        )}
 
        {!loadingRekap && detailList.length === 0 && (
-         <div style={{padding:'32px',textAlign:'center',color(--text3)',fontSize:13}}>
+         <div style={{padding:'32px',textAlign:'center',color:'var(--text3)',fontSize:13}}>
            Tidak ada data absen untuk periode ini
          </div>
        )}
