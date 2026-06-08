@@ -232,9 +232,23 @@ export default function Absen() {
                    borderRadius: 'var(--radius)', padding: '10px 6px', cursor: isLocked ? 'not-allowed' : 'pointer', textAlign: 'center', opacity: isLocked ? 0.7 : 1, transition: 'all .15s',
                  }}>
                  {k.foto_url
-                    ? <img src={k.foto_url} alt={k.nama} style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', margin: '0 auto 5px', display: 'block', border: '1px solid var(--border)' }} />
-                   : <div style={{ width: 36, height: 36, borderRadius: '50%', background: COLORS[i % COLORS.length], margin: '0 auto 5px', display: 'flex', alignItems: 'center', justifycenter: 'center', fontSize: 12, fontWeight: 700, color: '#fff' }}>{inisial(k.nama)}</div>
-                 }
+  ? <img src={k.foto_url} alt={k.nama} style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', margin: '0 auto 5px', display: 'block', border: '1px solid var(--border)' }} />
+  : <div style={{ 
+      width: 36, 
+      height: 36, 
+      borderRadius: '50%', 
+      background: COLORS[i % COLORS.length], 
+      margin: '0 auto 5px', 
+      display: 'flex', 
+      alignItems: 'center',       // Menyelaraskan secara vertikal
+      justifyContent: 'center',   // FIX: Memperbaiki typo agar sejajar secara horizontal
+      fontSize: 12, 
+      fontWeight: 700, 
+      color: '#fff' 
+    }}>
+      {inisial(k.nama)}
+    </div>
+}
                  <div style={{ fontSize:11, fontWeight:600 }}>{k.nama.split(' ')[0]}</div>
                  <div style={{ fontSize:9, color:'var(--text3)', marginTop:1 }}>{shiftDinamis.nama}</div>
                  <div style={{ fontSize: 9, fontWeight: 700, padding: '2px 5px', borderRadius: 8, marginTop: 4, display: 'inline-block', color: spColor }}>{statusAbsen || 'Belum'}</div>
