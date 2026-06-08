@@ -44,7 +44,6 @@ export default function DetailKaryawan() {
  useEffect(() => { loadAll() }, [id])
 
  async function loadAll() {
-   // Ambil data pengaturan dan list shift dari backend via api
    const [kRes, aRes, gRes, jRes, cfgRes] = await Promise.all([
      getKaryawanById(id),
      getAbsensiBulan(id, bulan, tahun),
@@ -58,11 +57,10 @@ export default function DetailKaryawan() {
    setGaji(gRes.data)
    setJabList(jRes.data)
    setCfg(cfgRes.data)
-   // Menyimpan master shifts dari data pengaturan/api jika tersedia
+   
    if (cfgRes.data?.shifts) {
      setShifts(cfgRes.data.shifts)
    } else {
-     // Fallback jika API terpisah, Anda bisa menyesuaikan atau mengambil data shift di sini
      setShifts(cfgRes.data?.master_shifts || [])
    }
    
@@ -112,8 +110,8 @@ export default function DetailKaryawan() {
 
  if (!k) return <div style={{padding:40,textAlign:'center',color:'var(--text3)'}}>Memuat...</div>
 
- // Ambil data shift hari ini secara dinamis berdasarkan jadwal mingguan
- const hariIniIndex = (now.getDay() === 0) ? 6 : now.getDay() - 1 // 0: Sen, 6: Min
+ // Mencari shift dinamis khusus hari ini 
+ const hariIniIndex = (now.getDay() === 0) ? 6 : now.getDay() - 1 
  const shiftHariIniIdx = jadwal[hariIniIndex] 
  const listShiftsMaster = cfg.shifts || []
  const activeShiftHariIni = listShiftsMaster[shiftHariIniIdx]
@@ -125,13 +123,19 @@ export default function DetailKaryawan() {
  const toleransi   = parseInt(cfg.toleransi_telat) || 15
  const defaultJamIn = "07:00"
 
- // Fungsi pembantu untuk mencari jam masuk terikat jadwal shift hari tertentu
+ // FIX LOGIKA: Membaca indeks hari berdasarkan penanggalan lokal aman (Anti-bias UTC)
  function getBatasJamMasukByTanggal(tglStr) {
    if (!tglStr || listShiftsMaster.length === 0) return defaultJamIn
-   const d = new Date(tglStr)
+   
+   // Pecah string "YYYY-MM-DD" agar dibaca sebagai tanggal lokal, bukan UTC murni
+   const parts = tglStr.split('-')
+   if (parts.length !== 3) return defaultJamIn
+   
+   const d = new Date(parts[0], parts[1] - 1, parts[2]) 
    const idxHari = (d.getDay() === 0) ? 6 : d.getDay() - 1
    const idxShift = jadwal[idxHari]
-   if (idxShift === 3 || !listShiftsMaster[idxShift]) return defaultJamIn // Libur / tidak ditemukan
+   
+   if (idxShift === 3 || !listShiftsMaster[idxShift]) return defaultJamIn 
    return listShiftsMaster[idxShift].jam_masuk || defaultJamIn
  }
 
@@ -151,7 +155,8 @@ export default function DetailKaryawan() {
 
  function fmtTgl(tglStr) {
    if (!tglStr) return '-'
-   const d = new Date(tglStr)
+   const parts = tglStr.split('-')
+   const d = new Date(parts[0], parts[1] - 1, parts[2])
    const hari = ['Min','Sen','Sel','Rab','Kam','Jum','Sab'][d.getDay()]
    return `${hari}, ${d.getDate()} ${BULAN_ID[d.getMonth()].slice(0,3)}`
  }
@@ -171,19 +176,17 @@ export default function DetailKaryawan() {
    bulanOpts.push({ b: d.getMonth()+1, t: d.getFullYear(), label: BULAN_ID[d.getMonth()]+' '+d.getFullYear() })
  }
 
- // ── HITUNG RINCIAN POTONGAN ABSEN (REVISI SLIP GAJI) ─────────────────
+ // HITUNG POTONGAN ABSEN
  const potongPerHari = parseInt(cfg.potong_absen) || 50000
  const totalHariMangkir = (ring.sakit || 0) + (ring.izin || 0)
  const totalPotonganAbsen = totalHariMangkir * potongPerHari
  
- // Ambil variabel kalkulasi dari backend, gabung dengan potongan absen dinamis
  const gajiPokokBersih = gaji?.rincian?.gaji_pokok || 0
  const tunjanganJabatan = gaji?.rincian?.tunjangan || 0
  const bonusPasang      = gaji?.rincian?.bonus_pasang || 0
  const bonusManual      = gaji?.rincian?.bonus_manual || 0
  const potonganSistem   = gaji?.total_potongan || 0
  
- // Total akumulasi potongan seluruhnya
  const akumulasiPotongan = potonganSistem + totalPotonganAbsen
  const totalGajiBersihAkhir = (gajiPokokBersih + tunjanganJabatan + bonusPasang + bonusManual) - akumulasiPotongan
 
@@ -213,7 +216,7 @@ export default function DetailKaryawan() {
      </div>
 
      <div style={{display:'flex',borderBottom:'1px solid var(--border)',margin:'0 0 0'}}>
-       {[{id:'ringkasan',label:'Ringkasan'},{id:'rekap',label:'Rekap Absen'}].map(t => (
+       {[{id:'ringl_panel',id:'ringkasan',label:'Ringkasan'},{id:'rekap',label:'Rekap Absen'}].map(t => (
          <button key={t.id} onClick={() => setTab(t.id)} style={{
            flex:1, padding:'12px 0', background:'none', border:'none',
            borderBottom: tab===t.id ? '2px solid var(--accent)' : '2px solid transparent',
@@ -378,7 +381,7 @@ export default function DetailKaryawan() {
        )}
 
        {!loadingRekap && detailList.length === 0 && (
-         <div style={{padding:'32px',textAlign:'center',color:'var(--text3)',fontSize:13}}>
+         <div style={{padding:'32px',textAlign:'center',color(--text3)',fontSize:13}}>
            Tidak ada data absen untuk periode ini
          </div>
        )}
@@ -417,7 +420,7 @@ export default function DetailKaryawan() {
                }}>
                  {d.jam_masuk || '—'}
                </span>
-               {isTelat && (
+               {d.status === 'hadir' && (
                  <span style={{fontSize:9,color:'var(--text3)'}}>
                    batas {batasJamInTanggal}
                  </span>
