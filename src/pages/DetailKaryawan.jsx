@@ -124,24 +124,29 @@ export default function DetailKaryawan() {
  const defaultJamIn = k.shift?.jam_masuk || "07:00"
 
  // FIX LOGIKA TOTAL: Mengambil batas jam masuk dinamis dengan double-protection fallback
- function getBatasJamMasukByTanggal(tglStr) {
+function getBatasJamMasukByTanggal(tglStr) {
    if (!tglStr) return defaultJamIn
    
-   const parts = tglStr.split('-')
-   if (parts.length !== 3) return defaultJamIn
+   const dateOnly = tglStr.split('T')[0] // '2024-06-11T07:15:00' menjadi '2024-06-11'
+   const parts = dateOnly.split('-')
    
-   const d = new Date(parts[0], parts[1] - 1, parts[2]) 
+   if (parts.length !== 3) return defaultJamIn
+   const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2])) 
+   if (isNaN(d.getTime())) return defaultJamIn
+
    const idxHari = (d.getDay() === 0) ? 6 : d.getDay() - 1
    const idxShift = jadwal[idxHari]
    
+   // Jika tidak ada jadwal untuk hari tersebut
+   if (idxShift === undefined || idxShift === null) return defaultJamIn
    if (idxShift === 3) return "Libur"
    
-   // Jalur Utama: Ambil dari master shifts pengaturan sistem
-   if (shifts.length > 0 && shifts[idxShift]) {
+   // 3. JALUR UTAMA
+   if (shifts && shifts.length > 0 && shifts[idxShift]) {
      return shifts[idxShift].jam_masuk || defaultJamIn
    }
    
-   // Jalur Cadangan: Jika database array shifts kosong, gunakan data object shift personal karyawan
+   // JALUR CADANGAN
    return defaultJamIn
  }
 
