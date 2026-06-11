@@ -63,7 +63,9 @@ export default function DetailKaryawan() {
    
    const masterShiftsRaw = configData?.shifts || configData?.master_shifts || []
    setShifts(masterShiftsRaw)
-   
+   console.log("=== DEBUG API LOAD ===")
+console.log("Master Shifts Raw:", masterShiftsRaw)
+console.log("Jadwal dari DB:", kRes.data.jadwal_mingguan)
    setEditNama(kRes.data.nama)
    setEditJab(kRes.data.jabatan_id)
    setEditShift(kRes.data.shift_id)
@@ -136,7 +138,7 @@ function getBatasJamMasukByTanggal(tglStr) {
 
    const idxHari = (d.getDay() === 0) ? 6 : d.getDay() - 1
    const idxShift = jadwal[idxHari]
-   
+   console.log(`[Tgl: ${tglStr}] Hari idx: ${idxHari}, Shift idx: ${idxShift}, Isi Shifts saat ini:`, shifts)
    // Jika tidak ada jadwal untuk hari tersebut
    if (idxShift === undefined || idxShift === null) return defaultJamIn
    if (idxShift === 3) return "Libur"
