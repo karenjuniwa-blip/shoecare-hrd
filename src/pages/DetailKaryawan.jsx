@@ -44,34 +44,39 @@ export default function DetailKaryawan() {
  useEffect(() => { loadAll() }, [id])
 
  async function loadAll() {
-   const [kRes, aRes, gRes, jRes, cfgRes] = await Promise.all([
-     getKaryawanById(id),
-     getAbsensiBulan(id, bulan, tahun),
-     getGaji(id, bulan, tahun),
-     getJabatan(),
-     getPengaturan(),
-     getShift(),
-   ])
-   
-   setK(kRes.data)
-   setAbsen(aRes.data)
-   setGaji(gRes.data)
-   setJabList(jRes.data)
-   
-   // FIX AKAR MASALAH: Antisipasi jika format respons dari Supabase dibungkus dalam bentuk Array list
-   const configData = Array.isArray(cfgRes.data) ? cfgRes.data[0] : cfgRes.data
-   setCfg(configData || {})
-   
-   const masterShiftsRaw = Array.isArray(shiftRes.data) ? shiftRes.data : []
-   setShifts(masterShiftsRaw)
-   
-   setEditNama(kRes.data.nama)
-   setEditJab(kRes.data.jabatan_id)
-   setEditShift(kRes.data.shift_id)
-   setJadwal(kRes.data.jadwal_mingguan || [0,0,0,0,0,1,2])
-   
-   loadRekap(bulan, tahun, aRes.data)
- }
+  try {
+    const [kRes, aRes, gRes, jRes, cfgRes, shiftRes] = await Promise.all([
+      getKaryawanById(id),
+      getAbsensiBulan(id, bulan, tahun),
+      getGaji(id, bulan, tahun),
+      getJabatan(),
+      getPengaturan(),
+      getShift() // Penarikan data tabel shift yang benar
+    ])
+    
+    setK(kRes.data)
+    setAbsen(aRes.data)
+    setGaji(gRes.data)
+    setJabList(jRes.data)
+    
+    const configData = Array.isArray(cfgRes.data) ? cfgRes.data[0] : cfgRes.data
+    setCfg(configData || {})
+    
+    const masterShiftsRaw = Array.isArray(shiftRes.data) ? shiftRes.data : []
+    setShifts(masterShiftsRaw)
+    
+    setEditNama(kRes.data.nama)
+    setEditJab(kRes.data.jabatan_id)
+    setEditShift(kRes.data.shift_id)
+    
+    // SANGAT KRUSIAL: Baris ini memastikan jadwal ditarik dari database, bukan kembali ke default!
+    setJadwal(kRes.data.jadwal_mingguan || [0,0,0,0,0,1,2])
+    
+    loadRekap(bulan, tahun, aRes.data)
+  } catch (error) {
+    console.error("Gagal menarik data loadAll:", error)
+  }
+}
 
  async function loadRekap(b, t, absenDataOverride) {
    setLoadingRekap(true)
@@ -96,14 +101,23 @@ export default function DetailKaryawan() {
  }
 
  async function simpan() {
-   await updateKaryawan(id, {
-     nama: editNama, jabatan_id: editJab,
-     shift_id: editShift, jadwal_mingguan: jadwal
-   })
-   setSaved(true)
-   setTimeout(() => setSaved(false), 2000)
-   loadAll()
- }
+  try {
+    await updateKaryawan(id, {
+      nama: editNama, 
+      jabatan_id: editJab,
+      shift_id: editShift, 
+      jadwal_mingguan: jadwal // Payload ini yang dikirim ke DB
+    })
+    
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
+    loadAll() // Memuat ulang data untuk memastikan UI sinkron dengan DB
+    
+  } catch (error) {
+    console.error("Gagal saat menyimpan:", error)
+    alert("Gagal menyimpan jadwal! Cek console browser untuk detail error.")
+  }
+}
 
  const cycleJadwal = i => {
    const j = [...jadwal]; j[i] = (j[i]+1)%4;
