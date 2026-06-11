@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { getKaryawanById, getAbsensiBulan, getGaji,
-        getJabatan, updateKaryawan, rupiah, getPengaturan } from '../api'
+        getJabatan, updateKaryawan, rupiah, getPengaturan, getShift } from '../api'
 
 const COLORS  = ['#3b82f6','#22c55e','#f59e0b','#a78bfa','#ef4444','#14b8a6']
 const HARI    = ['Sen','Sel','Rab','Kam','Jum','Sab','Min']
@@ -50,6 +50,7 @@ export default function DetailKaryawan() {
      getGaji(id, bulan, tahun),
      getJabatan(),
      getPengaturan(),
+     getShift(),
    ])
    
    setK(kRes.data)
@@ -61,11 +62,9 @@ export default function DetailKaryawan() {
    const configData = Array.isArray(cfgRes.data) ? cfgRes.data[0] : cfgRes.data
    setCfg(configData || {})
    
-   const masterShiftsRaw = configData?.shifts || configData?.master_shifts || []
+   const masterShiftsRaw = Array.isArray(shiftRes.data) ? shiftRes.data : []
    setShifts(masterShiftsRaw)
-   console.log("=== DEBUG API LOAD ===")
-console.log("Master Shifts Raw:", masterShiftsRaw)
-console.log("Jadwal dari DB:", kRes.data.jadwal_mingguan)
+   
    setEditNama(kRes.data.nama)
    setEditJab(kRes.data.jabatan_id)
    setEditShift(kRes.data.shift_id)
