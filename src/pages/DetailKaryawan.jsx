@@ -332,7 +332,7 @@ function getBatasJamMasukByTanggal(tglStr) {
 
              return (
                <div key={h} style={{textAlign:'center'}}>
-                 <div style={{fontSize:9,color(--text3)',fontWeight:600,marginBottom:4}}>{h}</div>
+                 <div key={h} style={{fontSize:9, color:'var(--text3)', fontWeight:600, marginBottom:4}}>{h}</div>
                  <button onClick={() => cycleJadwal(i)} style={{width:34,height:34,borderRadius:8,border:`1.5px solid ${buttonCfg.bc}`,background:buttonCfg.bg,color:buttonCfg.c,cursor:'pointer',fontSize:9,fontWeight:700,fontFamily:'inherit'}}>{buttonCfg.l}</button>
                </div>
              )
