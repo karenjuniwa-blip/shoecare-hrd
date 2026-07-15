@@ -402,14 +402,15 @@ const totalGajiBersihAkhir = (gajiPokokBersih + tunjanganJabatan + bonusPasang +
           </p>
           {gaji && (
             <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 16, margin: '0 16px 10px' }}>
-              {[
-                { l: 'Gaji pokok', v: rupiah(gajiPokokBersih), c: '' },
-                { l: 'Tunjangan jabatan', v: '+' + rupiah(tunjanganJabatan), c: 'var(--green)' },
-                { l: 'Bonus pasang', v: '+' + rupiah(bonusPasang), c: 'var(--green)' },
-                { l: 'Bonus manual', v: '+' + rupiah(bonusManual), c: 'var(--green)' },
-                { l: `Potongan Absen (${totalHariMangkir} hari)`, v: totalPotonganAbsen > 0 ? '-' + rupiah(totalPotonganAbsen) : '—', c: totalPotonganAbsen > 0 ? 'var(--red)' : '' },[cite: 2, 3]
-                { l: 'Potongan Lain-lain', v: potonganSistem > 0 ? '-' + rupiah(potonganSistem) : '—', c: potonganSistem > 0 ? 'var(--red)' : '' },
-              ].map((r, i) => (
+    
+                {[
+                  { l: 'Gaji pokok', v: rupiah(gajiPokokBersih), c: '' },
+                  { l: 'Tunjangan jabatan', v: '+' + rupiah(tunjanganJabatan), c: 'var(--green)' },
+                  { l: 'Bonus pasang', v: '+' + rupiah(bonusPasang), c: 'var(--green)' },
+                  { l: 'Bonus manual', v: '+' + rupiah(bonusManual), c: 'var(--green)' },
+                  { l: `Potongan Absen (${totalHariMangkir} hari)`, v: totalPotonganAbsen > 0 ? '-' + rupiah(totalPotonganAbsen) : '—', c: totalPotonganAbsen > 0 ? 'var(--red)' : '' },
+                  { l: 'Potongan Lain-lain', v: potonganSistem > 0 ? '-' + rupiah(potonganSistem) : '—', c: potonganSistem > 0 ? 'var(--red)' : '' },
+                ].map((r, i) => (
                 <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
                   <span style={{ color: 'var(--text2)' }}>{r.l}</span>
                   <span style={{ fontWeight: 600, fontFamily: 'DM Mono,monospace', color: r.c || 'var(--text)' }}>{r.v}</span>
