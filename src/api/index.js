@@ -193,37 +193,26 @@ export async function getGaji(karyawan_id, bulan, tahun, filterTanggal = null) {
   let dari, sampai
   let usingCustomPeriod = false
 
-  // Jika admin mengisi filter rentang tanggal kustom dari UI
   if (filterTanggal && filterTanggal.dari && filterTanggal.sampai) {
-    // Normalisasi: pastikan hanya ambil bagian YYYY-MM-DD,
-    // jaga-jaga kalau ada komponen jam/timezone ikut terbawa dari input
     dari   = String(filterTanggal.dari).split('T')[0]
     sampai = String(filterTanggal.sampai).split('T')[0]
     usingCustomPeriod = true
-
-    // Kalau user kebalik pilih tanggal (dari > sampai), tukar otomatis
-    // supaya query tidak salah arah / kosong tanpa penjelasan
-    if (dari > sampai) {
-      const tmp = dari
-      dari = sampai
-      sampai = tmp
-    }
+    if (dari > sampai) { const tmp = dari; dari = sampai; sampai = tmp }
   } else {
-    // Jalur bawaan: hitung otomatis berdasarkan bulan & tahun berjalan
     dari = `${tahun}-${String(bulan).padStart(2, '0')}-01`
     const hari = new Date(tahun, bulan, 0).getDate()
     sampai = `${tahun}-${String(bulan).padStart(2, '0')}-${String(hari).padStart(2, '0')}`
   }
 
-  // Ambil semua data yang dibutuhkan sekaligus berdasarkan rentang 'dari' & 'sampai'
+  // 🔍 DEBUG — hapus setelah masalah ketemu
+  console.log('[getGaji] rentang query dikirim ke Supabase:', { dari, sampai, usingCustomPeriod })
+
   const [karyRes, absenRes, pasangRes, bonusRes] = await Promise.all([
     supabase.from('karyawan')
       .select('nama, jabatan(gaji_pokok, tunjangan)')
       .eq('id', karyawan_id)
       .single(),
     supabase.from('absensi')
-      // PENTING: ambil 'tanggal' juga, bukan cuma 'status' —
-      // dibutuhkan untuk dedupe di bawah
       .select('tanggal, status')
       .eq('karyawan_id', karyawan_id)
       .gte('tanggal', dari).lte('tanggal', sampai),
@@ -242,27 +231,25 @@ export async function getGaji(karyawan_id, bulan, tahun, filterTanggal = null) {
   if (pasangRes.error) throw new Error(pasangRes.error.message)
   if (bonusRes.error) throw new Error(bonusRes.error.message)
 
+  // 🔍 DEBUG — ini yang paling penting: cek isi baris yang benar-benar dikembalikan.
+  // Kalau di sini sudah muncul baris di luar 06-06 s/d 06-07, berarti masalahnya
+  // di kolom 'tanggal' (kemungkinan besar bertipe text dengan format bukan YYYY-MM-DD).
+  console.log('[getGaji] baris absensi yang dikembalikan Supabase:', absenRes.data)
+
   const kary   = karyRes.data
   const pasang = pasangRes.data || []
   const bonus  = bonusRes.data  || []
 
-  // ── DEDUPE PER TANGGAL ──────────────────────────────────────
-  // Kalau ada lebih dari satu baris absensi untuk tanggal yang sama
-  // (misal karena double-insert / data lama sebelum pakai upsert),
-  // pastikan tiap TANGGAL hanya dihitung SEKALI di ringkasan.
-  // Ini akar masalah kenapa "2 potongan absen" bisa muncul padahal
-  // yang benar cuma 1 hari.
   const absenByTanggal = new Map()
-  ;(absenRes.data || []).forEach(a => {
-    absenByTanggal.set(a.tanggal, a.status)
-  })
+  ;(absenRes.data || []).forEach(a => { absenByTanggal.set(a.tanggal, a.status) })
 
   const ringkasan_absen = { hadir: 0, sakit: 0, izin: 0, libur: 0 }
   absenByTanggal.forEach(status => {
     if (ringkasan_absen[status] !== undefined) ringkasan_absen[status]++
   })
 
-  // Kalkulasi
+  console.log('[getGaji] ringkasan_absen hasil hitung:', ringkasan_absen)
+
   const gaji_pokok      = kary.jabatan?.gaji_pokok || 0
   const tunjangan       = kary.jabatan?.tunjangan  || 0
   const bonus_pasang    = pasang.reduce((s, p) => s + (p.bonus_dihitung || 0), 0)
