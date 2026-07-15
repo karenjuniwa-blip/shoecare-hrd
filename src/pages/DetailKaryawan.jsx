@@ -244,21 +244,20 @@ export default function DetailKaryawan() {
     })
   }
 
-  const potongPerHari = parseInt(cfg.potong_absen) || 50000[cite: 1, 3]
+  const potongPerHari = parseInt(cfg.potong_absen) || 50000;
 
 // PERBAIKAN: Ambil ringkasan dari data gaji (hasil filter) jika ada, jika tidak ada baru gunakan default bulanan
 const ringkasanGaji = gaji?.ringkasan_absen || absen.ringkasan;
 const totalHariMangkir = (ringkasanGaji?.sakit || 0) + (ringkasanGaji?.izin || 0);
 
-const totalPotonganAbsen = totalHariMangkir * potongPerHari[cite: 1, 3]
-const gajiPokokBersih = gaji?.rincian?.gaji_pokok || 0[cite: 1, 3]
-const tunjanganJabatan = gaji?.rincian?.tunjangan || 0[cite: 1, 3]
-const bonusPasang      = gaji?.rincian?.bonus_pasang || 0[cite: 1, 3]
-const bonusManual      = gaji?.rincian?.bonus_manual || 0[cite: 1, 3]
-const potonganSistem   = gaji?.total_potongan || 0[cite: 1, 3]
-const akumulasiPotongan = potonganSistem + totalPotonganAbsen[cite: 1, 3]
-const totalGajiBersihAkhir = (gajiPokokBersih + tunjanganJabatan + bonusPasang + bonusManual) - akumulasiPotongan[cite: 1, 3]
-
+const totalPotonganAbsen = totalHariMangkir * potongPerHari;
+const gajiPokokBersih = gaji?.rincian?.gaji_pokok || 0;
+const tunjanganJabatan = gaji?.rincian?.tunjangan || 0;
+const bonusPasang      = gaji?.rincian?.bonus_pasang || 0;
+const bonusManual      = gaji?.rincian?.bonus_manual || 0;
+const potonganSistem   = gaji?.total_potongan || 0;
+const akumulasiPotongan = potonganSistem + totalPotonganAbsen;
+const totalGajiBersihAkhir = (gajiPokokBersih + tunjanganJabatan + bonusPasang + bonusManual) - akumulasiPotongan;
   return (
     <div>
       {/* Header Sticky */}
