@@ -225,10 +225,11 @@ export async function getGaji(karyawan_id, bulan, tahun, filterTanggal = null) {
 
   if (karyRes.error) throw new Error(karyRes.error.message)
 
-  const kary  = karyRes.data
-  const absen = absenRes.data  ||
-  const pasang= pasangRes.data ||
-  const bonus = bonusRes.data  ||
+  // KODE YANG BENAR:
+const kary  = karyRes.data
+const absen = absenRes.data  || []
+const pasang= pasangRes.data || []
+const bonus = bonusRes.data  || []
 
   // Ringkasan absensi
   const ringkasan_absen = { hadir: 0, sakit: 0, izin: 0, libur: 0 }
