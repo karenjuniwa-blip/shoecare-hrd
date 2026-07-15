@@ -244,16 +244,20 @@ export default function DetailKaryawan() {
     })
   }
 
-  const potongPerHari       = parseInt(cfg.potong_absen) || 50000
-  const totalHariMangkir     = (ring.sakit || 0) + (ring.izin || 0)
-  const totalPotonganAbsen   = totalHariMangkir * potongPerHari
-  const gajiPokokBersih     = gaji?.rincian?.gaji_pokok || 0
-  const tunjanganJabatan     = gaji?.rincian?.tunjangan || 0
-  const bonusPasang          = gaji?.rincian?.bonus_pasang || 0
-  const bonusManual          = gaji?.rincian?.bonus_manual || 0
-  const potonganSistem       = gaji?.total_potongan || 0
-  const akumulasiPotongan    = potonganSistem + totalPotonganAbsen
-  const totalGajiBersihAkhir = (gajiPokokBersih + tunjanganJabatan + bonusPasang + bonusManual) - akumulasiPotongan
+  const potongPerHari = parseInt(cfg.potong_absen) || 50000[cite: 1, 3]
+
+// PERBAIKAN: Ambil ringkasan dari data gaji (hasil filter) jika ada, jika tidak ada baru gunakan default bulanan
+const ringkasanGaji = gaji?.ringkasan_absen || absen.ringkasan;
+const totalHariMangkir = (ringkasanGaji?.sakit || 0) + (ringkasanGaji?.izin || 0);
+
+const totalPotonganAbsen = totalHariMangkir * potongPerHari[cite: 1, 3]
+const gajiPokokBersih = gaji?.rincian?.gaji_pokok || 0[cite: 1, 3]
+const tunjanganJabatan = gaji?.rincian?.tunjangan || 0[cite: 1, 3]
+const bonusPasang      = gaji?.rincian?.bonus_pasang || 0[cite: 1, 3]
+const bonusManual      = gaji?.rincian?.bonus_manual || 0[cite: 1, 3]
+const potonganSistem   = gaji?.total_potongan || 0[cite: 1, 3]
+const akumulasiPotongan = potonganSistem + totalPotonganAbsen[cite: 1, 3]
+const totalGajiBersihAkhir = (gajiPokokBersih + tunjanganJabatan + bonusPasang + bonusManual) - akumulasiPotongan[cite: 1, 3]
 
   return (
     <div>
@@ -403,7 +407,7 @@ export default function DetailKaryawan() {
                 { l: 'Tunjangan jabatan', v: '+' + rupiah(tunjanganJabatan), c: 'var(--green)' },
                 { l: 'Bonus pasang', v: '+' + rupiah(bonusPasang), c: 'var(--green)' },
                 { l: 'Bonus manual', v: '+' + rupiah(bonusManual), c: 'var(--green)' },
-                { l: `Potongan Absen (${totalHariMangkir} hari)`, v: totalPotonganAbsen > 0 ? '-' + rupiah(totalPotonganAbsen) : '—', c: totalPotonganAbsen > 0 ? 'var(--red)' : '' },
+                { l: `Potongan Absen (${totalHariMangkir} hari)`, v: totalPotonganAbsen > 0 ? '-' + rupiah(totalPotonganAbsen) : '—', c: totalPotonganAbsen > 0 ? 'var(--red)' : '' },[cite: 2, 3]
                 { l: 'Potongan Lain-lain', v: potonganSistem > 0 ? '-' + rupiah(potonganSistem) : '—', c: potonganSistem > 0 ? 'var(--red)' : '' },
               ].map((r, i) => (
                 <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
