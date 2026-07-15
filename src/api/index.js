@@ -186,15 +186,24 @@ export async function postBonus(body) {
 }
 
 // ═════════════════════════════════════════════════════════════
-// GAJI — dihitung di frontend, tidak butuh backend
+// GAJI — Kini Mendukung Filter Tanggal Kustom (Frontend-Driven)
 // ═════════════════════════════════════════════════════════════
 
-export async function getGaji(karyawan_id, bulan, tahun) {
-  const dari   = `${tahun}-${String(bulan).padStart(2, '0')}-01`
-  const hari   = new Date(tahun, bulan, 0).getDate()
-  const sampai = `${tahun}-${String(bulan).padStart(2, '0')}-${String(hari).padStart(2, '0')}`
+export async function getGaji(karyawan_id, bulan, tahun, filterTanggal = null) {
+  let dari, sampai;
 
-  // Ambil semua data yang dibutuhkan sekaligus
+  // Jika admin mengisi filter rentang tanggal kustom dari UI
+  if (filterTanggal && filterTanggal.dari && filterTanggal.sampai) {
+    dari = filterTanggal.dari;
+    sampai = filterTanggal.sampai;
+  } else {
+    // Jalur bawaan: hitung otomatis berdasarkan bulan & tahun berjalan
+    dari   = `${tahun}-${String(bulan).padStart(2, '0')}-01`
+    const hari   = new Date(tahun, bulan, 0).getDate()
+    sampai = `${tahun}-${String(bulan).padStart(2, '0')}-${String(hari).padStart(2, '0')}`
+  }
+
+  // Ambil semua data yang dibutuhkan sekaligus berdasarkan rentang 'dari' & 'sampai'
   const [karyRes, absenRes, pasangRes, bonusRes] = await Promise.all([
     supabase.from('karyawan')
       .select('nama, jabatan(gaji_pokok, tunjangan)')
@@ -217,9 +226,9 @@ export async function getGaji(karyawan_id, bulan, tahun) {
   if (karyRes.error) throw new Error(karyRes.error.message)
 
   const kary  = karyRes.data
-  const absen = absenRes.data  || []
-  const pasang= pasangRes.data || []
-  const bonus = bonusRes.data  || []
+  const absen = absenRes.data  ||
+  const pasang= pasangRes.data ||
+  const bonus = bonusRes.data  ||
 
   // Ringkasan absensi
   const ringkasan_absen = { hadir: 0, sakit: 0, izin: 0, libur: 0 }
@@ -239,6 +248,7 @@ export async function getGaji(karyawan_id, bulan, tahun) {
     data: {
       karyawan: kary.nama,
       bulan, tahun,
+      periode_custom: filterTanggal ? { dari, sampai } : null, // Menandai jika menggunakan rentang kustom
       rincian: { gaji_pokok, tunjangan, bonus_pasang, bonus_manual, potongan_manual },
       ringkasan_absen,
       detail_bonus: bonus,
