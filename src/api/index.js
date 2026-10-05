@@ -26,12 +26,13 @@ export async function getKaryawan() {
   const { data, error } = await supabase
     .from('karyawan')
     .select(`
-      id, nama, tanggal_masuk, jadwal_mingguan, aktif, foto_url,
+      id, nama, tanggal_masuk, jadwal_mingguan, aktif, foto_url, target_pasang,
       jabatan ( id, nama, gaji_pokok, tunjangan ),
       shift   ( id, nama, jam_masuk, jam_keluar )
     `)
     .eq('aktif', true)
     .order('nama')
+
   return check(error, data)
 }
 
@@ -41,12 +42,13 @@ export async function getKaryawanById(id) {
     .from('karyawan')
     .select(`
       id, nama, tanggal_masuk, jadwal_mingguan, aktif, foto_url,
-      jabatan_id, shift_id,
+      jabatan_id, shift_id, target_pasang,
       jabatan ( id, nama, gaji_pokok, tunjangan ),
       shift   ( id, nama, jam_masuk, jam_keluar )
     `)
     .eq('id', id)
     .single()
+
   return check(error, data)
 }
 
@@ -139,22 +141,45 @@ export async function getPasang(tanggal) {
 
 // Upsert pasang harian — bonus dihitung dari pengaturan
 export async function postPasang({ karyawan_id, tanggal, jumlah_pasang }) {
-  // Ambil pengaturan bonus
-  const cfg = await getPengaturan()
-  const target = parseInt(cfg.data?.target_pasang)      || 5
-  const bpp    = parseInt(cfg.data?.bonus_per_pasang)   || 5000
-  const ppp    = parseInt(cfg.data?.potong_per_pasang)  || 0
-  const lebih  = jumlah_pasang - target
-  const bonus_dihitung = lebih > 0 ? lebih * bpp : lebih < 0 ? lebih * ppp : 0
+  // Target bersifat individual; bonus & potongan tetap kebijakan global.
+  const [cfg, karyRes] = await Promise.all([
+    getPengaturan(),
+    supabase
+      .from('karyawan')
+      .select('target_pasang')
+      .eq('id', karyawan_id)
+      .single(),
+  ])
+
+  if (karyRes.error) throw new Error(karyRes.error.message)
+
+  const jumlah = parseInt(jumlah_pasang, 10) || 0
+  const target = parseInt(karyRes.data?.target_pasang, 10) || 5
+  const bpp    = parseInt(cfg.data?.bonus_per_pasang, 10) || 5000
+  const ppp    = parseInt(cfg.data?.potong_per_pasang, 10) || 0
+
+  const lebih = jumlah - target
+
+  // Positif = bonus, negatif = potongan target.
+  const bonus_dihitung =
+    lebih > 0 ? lebih * bpp :
+    lebih < 0 ? lebih * ppp :
+    0
 
   const { data, error } = await supabase
     .from('pasang_harian')
     .upsert(
-      { karyawan_id, tanggal, jumlah_pasang, bonus_dihitung },
+      {
+        karyawan_id,
+        tanggal,
+        jumlah_pasang: jumlah,
+        bonus_dihitung,
+      },
       { onConflict: 'karyawan_id,tanggal' }
     )
     .select()
     .single()
+
   return check(error, data)
 }
 
