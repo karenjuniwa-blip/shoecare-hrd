@@ -56,6 +56,37 @@ function selisihMenit(jamMasuk, batasJam) {
 
 
 
+function toLocalDateStr(d) {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+function makeSafeDate(year, monthIndex, day) {
+  const lastDay = new Date(year, monthIndex + 1, 0).getDate()
+  return new Date(year, monthIndex, Math.min(day, lastDay))
+}
+
+function getPayrollPeriod(today, cutoffDay) {
+  const y = today.getFullYear()
+  const m = today.getMonth()
+  const d = today.getDate()
+  let start, end
+
+  if (d <= cutoffDay) {
+    const prevCutoff = makeSafeDate(y, m - 1, cutoffDay)
+    start = new Date(prevCutoff.getFullYear(), prevCutoff.getMonth(), prevCutoff.getDate() + 1)
+    end = makeSafeDate(y, m, cutoffDay)
+  } else {
+    const currentCutoff = makeSafeDate(y, m, cutoffDay)
+    start = new Date(currentCutoff.getFullYear(), currentCutoff.getMonth(), currentCutoff.getDate() + 1)
+    end = makeSafeDate(y, m + 1, cutoffDay)
+  }
+
+  return { dari: toLocalDateStr(start), sampai: toLocalDateStr(end) }
+}
+
 export default function DetailKaryawan() {
 
   const { id }   = useParams()
@@ -141,59 +172,42 @@ export default function DetailKaryawan() {
 
 
   async function loadAll() {
-
     try {
-
-      const [kRes, aRes, gRes, jRes, cfgRes, shiftRes] = await Promise.all([
-
+      const [kRes, aRes, jRes, cfgRes, shiftRes] = await Promise.all([
         getKaryawanById(id),
-
         getAbsensiBulan(id, bulan, tahun),
-
-        getGaji(id, bulan, tahun),
-
         getJabatan(),
-
         getPengaturan(),
-
         getShift()
-
       ])
 
-      setK(kRes.data)
-
-      setAbsen(aRes.data)
-
-      setGaji(gRes.data)
-
-      setJabList(jRes.data)
-
       const configData = Array.isArray(cfgRes.data) ? cfgRes.data[0] : cfgRes.data
+      const cutoffDay = parseInt(configData?.tgl_tutup_gajian, 10) || 25
+      const periodeGaji = getPayrollPeriod(now, cutoffDay)
+      const gRes = await getGaji(id, null, null, {
+        dari: periodeGaji.dari,
+        sampai: periodeGaji.sampai
+      })
 
+      setK(kRes.data)
+      setAbsen(aRes.data)
+      setGaji(gRes.data)
+      setJabList(jRes.data)
       setCfg(configData || {})
+      setTglMulai(periodeGaji.dari)
+      setTglSelesai(periodeGaji.sampai)
 
       const masterShiftsRaw = Array.isArray(shiftRes.data) ? shiftRes.data : []
-
       setShifts(masterShiftsRaw)
-
       setEditNama(kRes.data.nama)
-
       setEditJab(kRes.data.jabatan_id)
-
       setEditTargetPasang(kRes.data.target_pasang ?? 5)
-
       setEditShift(kRes.data.shift_id)
-
       setJadwal(kRes.data.jadwal_mingguan || [0, 0, 0, 0, 0, 1, 2])
-
       loadRekap(bulan, tahun, aRes.data)
-
     } catch (error) {
-
-      console.error("Gagal menarik data loadAll:", error)
-
+      console.error('Gagal menarik data loadAll:', error)
     }
-
   }
 
 
@@ -224,6 +238,48 @@ export default function DetailKaryawan() {
 
     }
 
+  }
+
+
+
+  function cetakSlipGaji() {
+    if (!k || !gaji) return
+
+    const nama = k.nama || '-'
+    const jabatan = k.jabatan?.nama || '-'
+    const totalDiterima = totalGajiBersihAkhir > 0 ? totalGajiBersihAkhir : 0
+    const periode = `${tglMulai} s/d ${tglSelesai}`
+
+    const w = window.open('', '_blank', 'width=760,height=900')
+    if (!w) {
+      alert('Popup diblokir browser. Izinkan popup untuk mencetak slip gaji.')
+      return
+    }
+
+    w.document.write(`<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Slip Gaji - ${nama}</title>
+<style>
+body{font-family:Arial,sans-serif;color:#111;margin:40px}.head{border-bottom:2px solid #111;padding-bottom:14px;margin-bottom:22px}h1{margin:0 0 6px;font-size:22px}.muted{color:#666;font-size:12px}.meta{margin-bottom:22px;font-size:13px;line-height:1.7}.row{display:flex;justify-content:space-between;gap:20px;padding:9px 0;border-bottom:1px solid #ddd;font-size:13px}.green{color:#16803a}.red{color:#c62828}.total{display:flex;justify-content:space-between;margin-top:16px;padding:14px;background:#f2f5f9;font-weight:700;font-size:17px}.foot{margin-top:28px;font-size:10px;color:#777}@media print{body{margin:20mm}}
+</style>
+</head>
+<body>
+<div class="head"><h1>Slip Gaji Karyawan</h1><div class="muted">Stafora Pro</div></div>
+<div class="meta"><div><strong>Nama:</strong> ${nama}</div><div><strong>Jabatan:</strong> ${jabatan}</div><div><strong>Periode:</strong> ${periode}</div></div>
+<div class="row"><span>Gaji pokok</span><strong>${rupiah(gajiPokokBersih)}</strong></div>
+<div class="row"><span>Tunjangan jabatan</span><strong class="green">+${rupiah(tunjanganJabatan)}</strong></div>
+<div class="row"><span>Bonus pasang</span><strong class="${bonusPasang < 0 ? 'red' : 'green'}">${bonusPasang >= 0 ? '+' : '-'}${rupiah(Math.abs(bonusPasang))}</strong></div>
+<div class="row"><span>Bonus manual</span><strong class="green">+${rupiah(bonusManual)}</strong></div>
+<div class="row"><span>Potongan absen (${totalHariMangkir} hari)</span><strong class="red">${totalPotonganAbsen > 0 ? '-' + rupiah(totalPotonganAbsen) : '—'}</strong></div>
+<div class="row"><span>Potongan lain-lain</span><strong class="red">${potonganSistem > 0 ? '-' + rupiah(potonganSistem) : '—'}</strong></div>
+<div class="total"><span>Total diterima</span><span>${rupiah(totalDiterima)}</span></div>
+<div class="foot">Slip dibuat dari data Stafora Pro untuk periode yang sedang ditampilkan.</div>
+<script>window.onload=function(){window.print()}<\/script>
+</body>
+</html>` )
+    w.document.close()
   }
 
 
@@ -794,13 +850,15 @@ const totalGajiBersihAkhir = (gajiPokokBersih + tunjanganJabatan + bonusPasang +
 
             <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 16, margin: '0 16px 10px' }}>
 
+              <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 10 }}>Periode slip: {tglMulai} s/d {tglSelesai}</div>
+
                 {[
 
                   { l: 'Gaji pokok', v: rupiah(gajiPokokBersih), c: '' },
 
                   { l: 'Tunjangan jabatan', v: '+' + rupiah(tunjanganJabatan), c: 'var(--green)' },
 
-                  { l: 'Bonus pasang', v: '+' + rupiah(bonusPasang), c: 'var(--green)' },
+                  { l: bonusPasang < 0 ? 'Potongan target pasang' : 'Bonus pasang', v: bonusPasang > 0 ? '+' + rupiah(bonusPasang) : bonusPasang < 0 ? '-' + rupiah(Math.abs(bonusPasang)) : '—', c: bonusPasang < 0 ? 'var(--red)' : bonusPasang > 0 ? 'var(--green)' : '' },
 
                   { l: 'Bonus manual', v: '+' + rupiah(bonusManual), c: 'var(--green)' },
 
@@ -831,6 +889,13 @@ const totalGajiBersihAkhir = (gajiPokokBersih + tunjanganJabatan + bonusPasang +
                 </div>
 
               </div>
+
+              <button
+                onClick={cetakSlipGaji}
+                style={{ width: '100%', padding: 11, marginTop: 12, background: 'var(--bg3)', color: 'var(--text)', border: '1px solid var(--border2,#334060)', borderRadius: 'var(--radius-sm)', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
+              >
+                🧾 Cetak / Simpan PDF Slip Gaji
+              </button>
 
             </div>
 

@@ -1,22 +1,77 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getKaryawan, getAbsensi, rupiah } from '../api'
+import { getKaryawan, getAbsensi, getGaji, getPengaturan, rupiah } from '../api'
 import { useAdmin } from '../hooks/useAdmin'
-import { unduhExcelHRD, unduhPdfHRD } from '../utils/ekspor'
 import PinLock from '../components/PinLock'
 
-// ── PERBAIKAN 1: Mengembalikan Array COLORS ──
 const COLORS = ['#3b82f6','#22c55e','#f59e0b','#a78bfa','#ef4444','#14b8a6']
 
-// ── PERBAIKAN 2: Mengembalikan Fungsi Inisial ──
 const inisial = n =>
   n.split(' ')
    .slice(0,2)
    .map(w => w[0])
    .join('')
 
-const todayStr = () =>
-  new Date().toISOString().split('T')[0]
+const toLocalDateStr = (d = new Date()) => {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+const makeSafeDate = (year, monthIndex, day) => {
+  const lastDay = new Date(year, monthIndex + 1, 0).getDate()
+  return new Date(year, monthIndex, Math.min(day, lastDay))
+}
+
+const getPayrollPeriod = (today, cutoffDay) => {
+  const y = today.getFullYear()
+  const m = today.getMonth()
+  const d = today.getDate()
+
+  let start
+  let end
+
+  if (d <= cutoffDay) {
+    const prevCutoff = makeSafeDate(y, m - 1, cutoffDay)
+    start = new Date(
+      prevCutoff.getFullYear(),
+      prevCutoff.getMonth(),
+      prevCutoff.getDate() + 1
+    )
+    end = makeSafeDate(y, m, cutoffDay)
+  } else {
+    const currentCutoff = makeSafeDate(y, m, cutoffDay)
+    start = new Date(
+      currentCutoff.getFullYear(),
+      currentCutoff.getMonth(),
+      currentCutoff.getDate() + 1
+    )
+    end = makeSafeDate(y, m + 1, cutoffDay)
+  }
+
+  return {
+    dari: toLocalDateStr(start),
+    sampai: toLocalDateStr(end),
+    start,
+    end
+  }
+}
+
+const getPayDate = (periodEnd, cutoffDay, payDay) => {
+  const nextMonth = payDay <= cutoffDay ? 1 : 0
+  return makeSafeDate(
+    periodEnd.getFullYear(),
+    periodEnd.getMonth() + nextMonth,
+    payDay
+  )
+}
+
+const fmtShortDate = d =>
+  d.toLocaleDateString('id-ID', {
+    day: 'numeric',
+    month: 'short'
+  })
 
 export default function Dashboard() {
   const navigate = useNavigate()
@@ -25,6 +80,10 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
+  const [totalPayroll, setTotalPayroll] = useState(0)
+  const [payrollPeriod, setPayrollPeriod] = useState(null)
+  const [payDate, setPayDate] = useState(null)
+
   const { isAdmin } = useAdmin()
   const [showPin, setShowPin] = useState(!isAdmin)
 
@@ -32,20 +91,24 @@ export default function Dashboard() {
     if (!showPin) {
       loadData()
     }
-  }, [showPin]) 
+  }, [showPin])
 
   async function loadData() {
     try {
       setLoading(true)
       setError(null)
 
-      const [k, a] = await Promise.all([
+      const [k, a, cfgRes] = await Promise.all([
         getKaryawan(),
-        getAbsensi(todayStr())
+        getAbsensi(toLocalDateStr()),
+        getPengaturan()
       ])
 
       const listKaryawan = Array.isArray(k?.data) ? k.data : []
       const listAbsen    = Array.isArray(a?.data) ? a.data : []
+      const cfgData      = Array.isArray(cfgRes?.data)
+        ? (cfgRes.data[0] || {})
+        : (cfgRes?.data || {})
 
       setKaryawan(listKaryawan)
 
@@ -53,11 +116,60 @@ export default function Dashboard() {
       listAbsen.forEach(x => {
         if (x.karyawan_id) map[x.karyawan_id] = x.status
       })
-
       setAbsenMap(map)
+
+      const cutoffDay = parseInt(cfgData.tgl_tutup_gajian, 10) || 25
+      const payDay    = parseInt(cfgData.tgl_bayar_gajian, 10) || 27
+
+      const period = getPayrollPeriod(new Date(), cutoffDay)
+      setPayrollPeriod(period)
+      setPayDate(getPayDate(period.end, cutoffDay, payDay))
+
+      const potongPerHari = parseInt(cfgData.potong_absen, 10) || 50000
+
+      const hasilGaji = await Promise.all(
+        listKaryawan.map(karyawanItem =>
+          getGaji(
+            karyawanItem.id,
+            null,
+            null,
+            { dari: period.dari, sampai: period.sampai }
+          )
+        )
+      )
+
+      const total = hasilGaji.reduce((sum, result) => {
+        const g = result?.data
+        if (!g) return sum
+
+        const rincian = g.rincian || {}
+        const ringkasan = g.ringkasan_absen || {}
+
+        const totalHariMangkir =
+          (ringkasan.sakit || 0) +
+          (ringkasan.izin || 0)
+
+        const totalPotonganAbsen = totalHariMangkir * potongPerHari
+
+        const gajiPokok      = rincian.gaji_pokok || 0
+        const tunjangan      = rincian.tunjangan || 0
+        const bonusPasang    = rincian.bonus_pasang || 0
+        const bonusManual    = rincian.bonus_manual || 0
+        const potonganSistem = g.total_potongan || 0
+
+        const gajiBersih =
+          (gajiPokok + tunjangan + bonusPasang + bonusManual) -
+          potonganSistem -
+          totalPotonganAbsen
+
+        return sum + Math.max(0, gajiBersih)
+      }, 0)
+
+      setTotalPayroll(total)
+
     } catch (err) {
-      console.error("Dashboard load error:", err)
-      setError(err?.message || "Gagal memuat data")
+      console.error('Dashboard load error:', err)
+      setError(err?.message || 'Gagal memuat data')
     } finally {
       setLoading(false)
     }
@@ -65,33 +177,6 @@ export default function Dashboard() {
 
   const hadir = karyawan.filter(k => absenMap[k.id] === 'hadir').length
   const si = karyawan.filter(k => ['sakit','izin'].includes(absenMap[k.id])).length
-
-  const totalGaji = karyawan.reduce((s,k) =>
-    s + (k.jabatan?.gaji_pokok || 0) + (k.jabatan?.tunjangan || 0)
-  , 0)
-
-  // ── LOGIKA PEMBANTU UNTUK MEMPROSES EKSPOR DATA ──
-  const tanganiEkspor = (jenis) => {
-    const namaBulan = new Date().toLocaleString('id-ID', { month: 'long' })
-    const tahunIni = new Date().getFullYear().toString()
-    
-    const dataFormatted = karyawan.map(k => ({
-      nama: k.nama,
-      jabatan: k.jabatan,
-      total_hadir: absenMap[k.id] === 'hadir' ? 1 : 0,
-      total_izin_sakit: ['sakit','izin'].includes(absenMap[k.id]) ? 1 : 0,
-      gaji_pokok: k.jabatan?.gaji_pokok || 0,
-      tunjangan: k.jabatan?.tunjangan || 0,
-      bonus_pasang: 0, 
-      gaji_bersih: (k.jabatan?.gaji_pokok || 0) + (k.jabatan?.tunjangan || 0)
-    }))
-
-    if (jenis === 'excel') {
-      unduhExcelHRD(dataFormatted, namaBulan, tahunIni)
-    } else {
-      unduhPdfHRD(dataFormatted, namaBulan, tahunIni)
-    }
-  }
 
   if (showPin) {
     return (
@@ -125,14 +210,22 @@ export default function Dashboard() {
     return (
       <div style={{ padding:40, textAlign:'center', color:'var(--red)' }}>
         ⚠️ {error} <br/>
-        <button onClick={loadData} style={{ marginTop:10, padding:'6px 12px', background:'var(--accent)', color:'#fff', border:'none', borderRadius:6, cursor:'pointer' }}>Coba Lagi</button>
+        <button
+          onClick={loadData}
+          style={{ marginTop:10, padding:'6px 12px', background:'var(--accent)', color:'#fff', border:'none', borderRadius:6, cursor:'pointer' }}
+        >
+          Coba Lagi
+        </button>
       </div>
     )
   }
 
+  const payrollSub = payrollPeriod
+    ? `${fmtShortDate(payrollPeriod.start)}–${fmtShortDate(payrollPeriod.end)}${payDate ? ` · bayar ${fmtShortDate(payDate)}` : ''}`
+    : 'siklus berjalan'
+
   return (
     <div>
-      {/* Stat cards */}
       <p style={{ fontSize:11, fontWeight:600, color:'var(--text3)', textTransform:'uppercase', letterSpacing:'.08em', padding:'14px 20px 6px' }}>
         Ringkasan hari ini
       </p>
@@ -141,7 +234,7 @@ export default function Dashboard() {
         {[
           { label:'Hadir', val:hadir, color:'var(--green)', sub:`dari ${karyawan.length} karyawan` },
           { label:'Sakit / Izin', val:si, color:'var(--amber)', sub:'ada keterangan' },
-          { label:'Est. gaji bulan ini', val:rupiah(totalGaji), color:'var(--accent)', sub:'semua karyawan', mono:true },
+          { label:'Est. payroll siklus ini', val:rupiah(totalPayroll), color:'var(--accent)', sub:payrollSub, mono:true },
           { label:'Belum absen', val:karyawan.length-hadir-si, color:'var(--text2)', sub:'hari ini' }
         ].map((s,i) => (
           <div key={i} style={{ background:'var(--bg2)', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:13 }}>
@@ -154,23 +247,6 @@ export default function Dashboard() {
         ))}
       </div>
 
-      {/* ── TOMBOL EKSPOR LAPORAN BARU ── */}
-      <div style={{ display:'flex', gap:10, padding:'12px 16px 4px' }}>
-        <button
-          onClick={() => tanganiEkspor('excel')}
-          style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:6, padding:'10px', background:'#22c55e', color:'#fff', border:'none', borderRadius:'var(--radius-sm)', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}
-        >
-          📊 Unduh Excel
-        </button>
-        <button
-          onClick={() => tanganiEkspor('pdf')}
-          style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:6, padding:'10px', background:'#ef4444', color:'#fff', border:'none', borderRadius:'var(--radius-sm)', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}
-        >
-          📄 Unduh PDF
-        </button>
-      </div>
-
-      {/* Daftar karyawan */}
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'14px 20px 6px' }}>
         <p style={{ fontSize:11, fontWeight:600, color:'var(--text3)', textTransform:'uppercase', letterSpacing:'.08em' }}>
           Karyawan — tap untuk detail
@@ -186,7 +262,13 @@ export default function Dashboard() {
       <div style={{ background:'var(--bg2)', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:'0 16px', margin:'0 16px 24px' }}>
         {karyawan.map((k,i) => {
           const st = absenMap[k.id]
-          const badgeColor = { hadir:'var(--green)', sakit:'var(--red)', izin:'var(--amber)' }[st] || 'var(--text3)'
+
+          const badge = {
+            hadir: { label:'Hadir', color:'var(--green)' },
+            sakit: { label:'Sakit', color:'var(--red)' },
+            izin:  { label:'Izin', color:'var(--amber)' },
+            libur: { label:'Libur', color:'var(--text3)' }
+          }[st] || { label:'Belum', color:'var(--text3)' }
 
           return (
             <div
@@ -221,8 +303,16 @@ export default function Dashboard() {
                 {rupiah((k.jabatan?.gaji_pokok || 0) + (k.jabatan?.tunjangan || 0))}
               </div>
 
-              <div style={{ fontSize:10, fontWeight:600, padding:'3px 8px', borderRadius:20, background:badgeColor + '22', color:badgeColor, flexShrink:0 }}>
-                {st || 'Belum'}
+              <div style={{
+                fontSize:10,
+                fontWeight:600,
+                padding:'3px 8px',
+                borderRadius:20,
+                background:badge.color + '22',
+                color:badge.color,
+                flexShrink:0
+              }}>
+                {badge.label}
               </div>
             </div>
           )
