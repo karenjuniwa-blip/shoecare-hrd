@@ -18,7 +18,8 @@ import {
 
   getPengaturan, 
 
-  getShift 
+  getShift, getBonus, postBonus, deleteBonus,
+  getJadwalKhusus, simpanJadwalKhusus, hapusJadwalKhusus
 
 } from '../api'
 
@@ -160,6 +161,11 @@ export default function DetailKaryawan() {
   const [tglSelesai, setTglSelesai] = useState(defaultEndDate)
 
   const [loadingGaji, setLoadingGaji] = useState(false)
+  const [transaksi, setTransaksi] = useState([])
+  const [formTransaksi, setFormTransaksi] = useState({ tanggal: toLocalDateStr(new Date()), tipe: 'bonus', nominal: '', keterangan: '' })
+  const [savingTransaksi, setSavingTransaksi] = useState(false)
+  const [jadwalKhusus, setJadwalKhusus] = useState([])
+  const [formJadwal, setFormJadwal] = useState({ tanggal: toLocalDateStr(new Date()), shift_index: 3, keterangan: '' })
 
 
 
@@ -192,6 +198,8 @@ export default function DetailKaryawan() {
       setK(kRes.data)
       setAbsen(aRes.data)
       setGaji(gRes.data)
+      await refreshTransaksi(periodeGaji.dari, periodeGaji.sampai)
+      await refreshJadwal()
       setJabList(jRes.data)
       setCfg(configData || {})
       setTglMulai(periodeGaji.dari)
@@ -210,6 +218,60 @@ export default function DetailKaryawan() {
     }
   }
 
+  async function refreshTransaksi(dari, sampai) {
+    // Periode payroll bisa melintasi dua bulan kalender.
+    const { data } = await getTransaksiRentang(dari, sampai)
+    setTransaksi(data)
+  }
+
+  async function getTransaksiRentang(dari, sampai) {
+    const periods = new Set([dari.slice(0, 7), sampai.slice(0, 7)])
+    const result = await Promise.all([...periods].map(p => getBonus(id, Number(p.slice(5)), Number(p.slice(0, 4)))))
+    return { data: result.flatMap(r => r.data).filter(r => r.tanggal >= dari && r.tanggal <= sampai).sort((a,b) => b.tanggal.localeCompare(a.tanggal)) }
+  }
+
+  async function refreshJadwal() {
+    const awal = toLocalDateStr(new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1))
+    const akhir = toLocalDateStr(new Date(new Date().getFullYear(), new Date().getMonth() + 3, 0))
+    const { data } = await getJadwalKhusus(awal, akhir, id)
+    setJadwalKhusus(data)
+  }
+
+  async function tambahTransaksi(e) {
+    e.preventDefault()
+    if (!(Number(formTransaksi.nominal) > 0) || !formTransaksi.tanggal) return alert('Tanggal dan nominal positif wajib diisi.')
+    setSavingTransaksi(true)
+    try {
+      await postBonus({ karyawan_id: id, ...formTransaksi })
+      await Promise.all([refreshTransaksi(tglMulai, tglSelesai), muatUlangGaji()])
+      setFormTransaksi(p => ({ ...p, nominal: '', keterangan: '' }))
+    } catch (err) { alert(err.message) } finally { setSavingTransaksi(false) }
+  }
+
+  async function muatUlangGaji() {
+    const { data } = await getGaji(id, null, null, { dari: tglMulai, sampai: tglSelesai })
+    setGaji(data)
+  }
+
+  async function hapusTransaksi(row) {
+    if (!window.confirm(`Hapus transaksi ${rupiah(row.nominal)} tanggal ${row.tanggal}?`)) return
+    try { await deleteBonus(row.id); await Promise.all([refreshTransaksi(tglMulai, tglSelesai), muatUlangGaji()]) }
+    catch (err) { alert(err.message) }
+  }
+
+  async function tambahJadwal(e) {
+    e.preventDefault()
+    try {
+      await simpanJadwalKhusus({ karyawan_id: id, tanggal: formJadwal.tanggal, shift_index: Number(formJadwal.shift_index), keterangan: formJadwal.keterangan })
+      await refreshJadwal()
+    } catch (err) { alert(err.message) }
+  }
+
+  async function hapusPengecualian(row) {
+    if (!window.confirm(`Batalkan perubahan jadwal ${row.tanggal}?`)) return
+    try { await hapusJadwalKhusus(row.id); await refreshJadwal() } catch (err) { alert(err.message) }
+  }
+
 
 
   // FUNGSI BARU: Filter Slip Gaji menggunakan parameter tanggal kustom
@@ -223,6 +285,7 @@ export default function DetailKaryawan() {
       const gRes = await getGaji(id, null, null, { dari: tglMulai, sampai: tglSelesai })
 
       setGaji(gRes.data)
+      await refreshTransaksi(tglMulai, tglSelesai)
 
       alert(`Berhasil memfilter slip gaji periode ${tglMulai} s/d ${tglSelesai}`)
 
@@ -271,9 +334,10 @@ body{font-family:Arial,sans-serif;color:#111;margin:40px}.head{border-bottom:2px
 <div class="row"><span>Gaji pokok</span><strong>${rupiah(gajiPokokBersih)}</strong></div>
 <div class="row"><span>Tunjangan jabatan</span><strong class="green">+${rupiah(tunjanganJabatan)}</strong></div>
 <div class="row"><span>Bonus pasang</span><strong class="${bonusPasang < 0 ? 'red' : 'green'}">${bonusPasang >= 0 ? '+' : '-'}${rupiah(Math.abs(bonusPasang))}</strong></div>
-<div class="row"><span>Bonus manual</span><strong class="green">+${rupiah(bonusManual)}</strong></div>
+<div class="row"><span>Bonus lainnya</span><strong class="green">+${rupiah(bonusManual)}</strong></div>
 <div class="row"><span>Potongan absen (${totalHariMangkir} hari)</span><strong class="red">${totalPotonganAbsen > 0 ? '-' + rupiah(totalPotonganAbsen) : '—'}</strong></div>
-<div class="row"><span>Potongan lain-lain</span><strong class="red">${potonganSistem > 0 ? '-' + rupiah(potonganSistem) : '—'}</strong></div>
+<div class="row"><span>Potongan kasbon</span><strong class="red">${potonganKasbon > 0 ? '-' + rupiah(potonganKasbon) : '—'}</strong></div>
+<div class="row"><span>Potongan lainnya</span><strong class="red">${potonganLainnya > 0 ? '-' + rupiah(potonganLainnya) : '—'}</strong></div>
 <div class="total"><span>Total diterima</span><span>${rupiah(totalDiterima)}</span></div>
 <div class="foot">Slip dibuat dari data Stafora Pro untuk periode yang sedang ditampilkan.</div>
 <script>window.onload=function(){window.print()}<\/script>
@@ -396,7 +460,8 @@ body{font-family:Arial,sans-serif;color:#111;margin:40px}.head{border-bottom:2px
 
   const hariIniIndex     = (now.getDay() === 0) ? 6 : now.getDay() - 1
 
-  const shiftHariIniIdx  = jadwal[hariIniIndex]
+  const hariIniOverride = jadwalKhusus.find(j => j.tanggal === toLocalDateStr(now))
+  const shiftHariIniIdx  = hariIniOverride ? Number(hariIniOverride.shift_index) : jadwal[hariIniIndex]
 
   const activeShiftHariIni = shifts[shiftHariIniIdx]
 
@@ -434,7 +499,8 @@ body{font-family:Arial,sans-serif;color:#111;margin:40px}.head{border-bottom:2px
 
     const idxHari  = (d.getDay() === 0) ? 6 : d.getDay() - 1
 
-    const idxShift = jadwal[idxHari]
+    const khusus = jadwalKhusus.find(j => j.tanggal === dateOnly)
+    const idxShift = khusus ? Number(khusus.shift_index) : jadwal[idxHari]
 
     if (idxShift === undefined || idxShift === null) return defaultJamIn
 
@@ -559,6 +625,8 @@ const tunjanganJabatan = gaji?.rincian?.tunjangan || 0;
 const bonusPasang      = gaji?.rincian?.bonus_pasang || 0;
 
 const bonusManual      = gaji?.rincian?.bonus_manual || 0;
+const potonganKasbon = gaji?.rincian?.potongan_kasbon || 0;
+const potonganLainnya = gaji?.rincian?.potongan_lainnya ?? (gaji?.total_potongan || 0);
 
 const potonganSistem   = gaji?.total_potongan || 0;
 
@@ -838,6 +906,27 @@ const totalGajiBersihAkhir = (gajiPokokBersih + tunjanganJabatan + bonusPasang +
 
 
 
+          <div style={{ margin: '12px 16px', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 12, padding: 16 }}>
+            <h3 style={{ fontSize: 14, margin: '0 0 6px' }}>💰 Bonus & Potongan Kasbon</h3>
+            <p style={{ fontSize: 11, color: 'var(--text3)' }}>Transaksi di tanggal periode slip akan otomatis masuk ke perhitungan gaji. Kasbon dicatat sebagai cicilan yang dipotong pada gaji, bukan uang pinjaman yang baru dicairkan.</p>
+            <form onSubmit={tambahTransaksi} style={{ display: 'grid', gap: 8 }}>
+              <select aria-label="Jenis transaksi" value={formTransaksi.tipe} onChange={e => setFormTransaksi(p => ({ ...p, tipe: e.target.value }))} style={{ padding: 9, background: 'var(--bg3)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: 8 }}>
+                <option value="bonus">Bonus</option><option value="kasbon">Potongan kasbon</option><option value="potongan">Potongan lainnya</option>
+              </select>
+              <input aria-label="Tanggal transaksi" type="date" required value={formTransaksi.tanggal} onChange={e => setFormTransaksi(p => ({ ...p, tanggal: e.target.value }))} style={{ padding: 9, background: 'var(--bg3)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: 8 }} />
+              <input aria-label="Nominal rupiah" type="number" min="1" step="1" placeholder="Nominal (Rp)" required value={formTransaksi.nominal} onChange={e => setFormTransaksi(p => ({ ...p, nominal: e.target.value }))} style={{ padding: 9, background: 'var(--bg3)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: 8 }} />
+              <input aria-label="Keterangan" placeholder="Keterangan, misalnya cicilan 1 dari 3" value={formTransaksi.keterangan} onChange={e => setFormTransaksi(p => ({ ...p, keterangan: e.target.value }))} style={{ padding: 9, background: 'var(--bg3)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: 8 }} />
+              <button type="submit" disabled={savingTransaksi} style={{ padding: 10, background: 'var(--accent)', color: 'white', border: 0, borderRadius: 8, fontWeight: 700 }}>{savingTransaksi ? 'Menyimpan...' : '+ Simpan transaksi'}</button>
+            </form>
+            <div style={{ fontSize: 11, marginTop: 12, color: 'var(--text3)' }}>Riwayat dalam periode slip</div>
+            {transaksi.length === 0 && <p style={{ color: 'var(--text3)', fontSize: 12 }}>Belum ada transaksi dalam periode ini.</p>}
+            {transaksi.map(t => <div key={t.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 0', borderBottom: '1px solid var(--border)', gap: 8 }}>
+              <div style={{ minWidth: 0, fontSize: 12 }}><div>{t.tanggal} · {t.tipe === 'bonus' ? 'Bonus' : /^Kasbon\s*[—-]/i.test(t.keterangan || '') ? 'Kasbon' : 'Potongan'}</div><div style={{ color: 'var(--text3)' }}>{t.keterangan || '—'}</div></div>
+              <strong style={{ fontSize: 12, whiteSpace: 'nowrap', color: t.tipe === 'bonus' ? 'var(--green)' : 'var(--red)' }}>{t.tipe === 'bonus' ? '+' : '−'}{rupiah(t.nominal)}</strong>
+              <button type="button" onClick={() => hapusTransaksi(t)} aria-label="Hapus transaksi" style={{ color: 'var(--red)', background: 'transparent', border: 0, cursor: 'pointer' }}>✕</button>
+            </div>)}
+          </div>
+
           {/* Rincian Slip Gaji */}
 
           <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '.08em', padding: '14px 20px 6px' }}>
@@ -860,11 +949,12 @@ const totalGajiBersihAkhir = (gajiPokokBersih + tunjanganJabatan + bonusPasang +
 
                   { l: bonusPasang < 0 ? 'Potongan target pasang' : 'Bonus pasang', v: bonusPasang > 0 ? '+' + rupiah(bonusPasang) : bonusPasang < 0 ? '-' + rupiah(Math.abs(bonusPasang)) : '—', c: bonusPasang < 0 ? 'var(--red)' : bonusPasang > 0 ? 'var(--green)' : '' },
 
-                  { l: 'Bonus manual', v: '+' + rupiah(bonusManual), c: 'var(--green)' },
+                  { l: 'Bonus lainnya', v: '+' + rupiah(bonusManual), c: 'var(--green)' },
 
                   { l: `Potongan Absen (${totalHariMangkir} hari)`, v: totalPotonganAbsen > 0 ? '-' + rupiah(totalPotonganAbsen) : '—', c: totalPotonganAbsen > 0 ? 'var(--red)' : '' },
 
-                  { l: 'Potongan Lain-lain', v: potonganSistem > 0 ? '-' + rupiah(potonganSistem) : '—', c: potonganSistem > 0 ? 'var(--red)' : '' },
+                  { l: 'Potongan kasbon', v: potonganKasbon > 0 ? '-' + rupiah(potonganKasbon) : '—', c: potonganKasbon > 0 ? 'var(--red)' : '' },
+                  { l: 'Potongan lainnya', v: potonganLainnya > 0 ? '-' + rupiah(potonganLainnya) : '—', c: potonganLainnya > 0 ? 'var(--red)' : '' },
 
                 ].map((r, i) => (
 
@@ -942,6 +1032,23 @@ const totalGajiBersihAkhir = (gajiPokokBersih + tunjanganJabatan + bonusPasang +
           </div>
 
 
+
+          <div style={{ margin: '12px 16px', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 12, padding: 16 }}>
+            <h3 style={{ fontSize: 14, margin: '0 0 5px' }}>🔄 Tukar Libur / Shift Sementara</h3>
+            <p style={{ fontSize: 11, color: 'var(--text3)' }}>Atur pengecualian hanya untuk tanggal tertentu tanpa mengubah jadwal mingguan permanen. Untuk tukar hari libur, tambahkan dua tanggal: hari pengganti kerja dan hari libur penggantinya.</p>
+            <form onSubmit={tambahJadwal} style={{ display: 'grid', gap: 8 }}>
+              <input type="date" aria-label="Tanggal jadwal khusus" required value={formJadwal.tanggal} onChange={e => setFormJadwal(p => ({ ...p, tanggal: e.target.value }))} style={{ padding: 9, background: 'var(--bg3)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: 8 }} />
+              <select aria-label="Shift pengganti" value={formJadwal.shift_index} onChange={e => setFormJadwal(p => ({ ...p, shift_index: Number(e.target.value) }))} style={{ padding: 9, background: 'var(--bg3)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: 8 }}>
+                {shifts.map((s,i) => <option key={s.id} value={i}>{s.nama}</option>)}<option value={3}>Libur</option>
+              </select>
+              <input aria-label="Alasan perubahan" placeholder="Alasan (mis. tukar libur dengan Jumat)" value={formJadwal.keterangan} onChange={e => setFormJadwal(p => ({ ...p, keterangan: e.target.value }))} style={{ padding: 9, background: 'var(--bg3)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: 8 }} />
+              <button type="submit" style={{ padding: 10, background: 'var(--accent)', color: 'white', border: 0, borderRadius: 8, fontWeight: 700 }}>Simpan jadwal khusus</button>
+            </form>
+            {jadwalKhusus.map(j => <div key={j.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, padding: '9px 0', borderBottom: '1px solid var(--border)', fontSize: 12 }}>
+              <span>{j.tanggal} · {Number(j.shift_index) === 3 ? 'Libur' : shifts[j.shift_index]?.nama || `Shift ${Number(j.shift_index)+1}`} <span style={{ color: 'var(--text3)' }}>{j.keterangan}</span></span>
+              <button type="button" onClick={() => hapusPengecualian(j)} style={{ color: 'var(--red)', border: 0, background: 'transparent' }}>Hapus</button>
+            </div>)}
+          </div>
 
           {/* Jadwal Mingguan */}
 

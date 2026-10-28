@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getKaryawan, getAbsensi, postAbsensi, getPengaturan } from '../api'
+import { getKaryawan, getAbsensi, postAbsensi, getPengaturan, getShift, getJadwalKhusus } from '../api'
 
 const COLORS = ['#3b82f6','#22c55e','#f59e0b','#a78bfa','#ef4444','#14b8a6']
 const inisial = n => n.split(' ').slice(0,2).map(w=>w[0]).join('')
@@ -27,6 +27,7 @@ export default function Absen() {
  const [error,    setError]    = useState(null)  
  const [loading,  setLoading]  = useState(true)  
  const [masterShifts, setMasterShifts] = useState([])
+ const [jadwalKhusus, setJadwalKhusus] = useState({})
 
  useEffect(() => {
    loadData()
@@ -39,18 +40,19 @@ export default function Absen() {
      setLoading(true)
      setError(null)
 
-     const [k, a, cfg] = await Promise.all([
+     const [k, a, cfg, sh, jk] = await Promise.all([
        getKaryawan(),
        getAbsensi(todayStr()),
-       getPengaturan()
+       getPengaturan(),
+       getShift(),
+       getJadwalKhusus(todayStr(), todayStr())
      ])
 
      const listKaryawan = Array.isArray(k.data) ? k.data : []
      const listAbsen    = Array.isArray(a.data) ? a.data : []
      
-     if (cfg.data && Array.isArray(cfg.data.shifts)) {
-       setMasterShifts(cfg.data.shifts)
-     }
+     setMasterShifts(sh.data || (Array.isArray(cfg.data?.shifts) ? cfg.data.shifts : []))
+     setJadwalKhusus(Object.fromEntries((jk.data || []).map(j => [j.karyawan_id, Number(j.shift_index)])))
 
      setKaryawan(listKaryawan)
      setRawAbsen(listAbsen)
@@ -79,7 +81,8 @@ export default function Absen() {
    // Konversi hari: getDay() -> 0: Minggu, 1: Senin...6: Sabtu
    // Target index sistem: 0: Senin, 1: Selasa...6: Minggu
    const dayIdx = (d.getDay() === 0) ? 6 : d.getDay() - 1
-   const shiftVal = karyawanObj.jadwal_mingguan[dayIdx]
+   const shiftVal = Object.prototype.hasOwnProperty.call(jadwalKhusus, karyawanObj.id)
+     ? jadwalKhusus[karyawanObj.id] : karyawanObj.jadwal_mingguan[dayIdx]
 
    if (shiftVal === 3) {
      return { nama: 'Libur', jam_masuk: '--:--', jam_keluar: '--:--', isLibur: true }

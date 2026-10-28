@@ -202,12 +202,37 @@ export async function getBonus(karyawan_id, bulan, tahun) {
 }
 
 export async function postBonus(body) {
+  if (!['bonus', 'potongan', 'kasbon'].includes(body.tipe) || !(Number(body.nominal) > 0)) throw new Error('Jenis dan nominal tidak valid')
   const { data, error } = await supabase
     .from('bonus_potongan')
-    .insert(body)
+    .insert({ ...body, nominal: Number(body.nominal), tipe: body.tipe === 'kasbon' ? 'potongan' : body.tipe, keterangan: body.tipe === 'kasbon' ? `Kasbon — ${body.keterangan || 'Cicilan kasbon'}` : body.keterangan })
     .select()
     .single()
   return check(error, data)
+}
+
+export async function deleteBonus(id) {
+  const { error } = await supabase.from('bonus_potongan').delete().eq('id', id)
+  return check(error, null)
+}
+
+// Pengecualian harian tidak mengubah jadwal mingguan permanen.
+export async function getJadwalKhusus(dari, sampai, karyawan_id = null) {
+  let query = supabase.from('jadwal_khusus').select('*').gte('tanggal', dari).lte('tanggal', sampai)
+  if (karyawan_id) query = query.eq('karyawan_id', karyawan_id)
+  const { data, error } = await query.order('tanggal')
+  return check(error, data)
+}
+
+export async function simpanJadwalKhusus(body) {
+  const { data, error } = await supabase.from('jadwal_khusus')
+    .upsert(body, { onConflict: 'karyawan_id,tanggal' }).select().single()
+  return check(error, data)
+}
+
+export async function hapusJadwalKhusus(id) {
+  const { error } = await supabase.from('jadwal_khusus').delete().eq('id', id)
+  return check(error, null)
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -229,8 +254,6 @@ export async function getGaji(karyawan_id, bulan, tahun, filterTanggal = null) {
     sampai = `${tahun}-${String(bulan).padStart(2, '0')}-${String(hari).padStart(2, '0')}`
   }
 
-  // 🔍 DEBUG — hapus setelah masalah ketemu
-  console.log('[getGaji] rentang query dikirim ke Supabase:', { dari, sampai, usingCustomPeriod })
 
   const [karyRes, absenRes, pasangRes, bonusRes] = await Promise.all([
     supabase.from('karyawan')
@@ -259,7 +282,6 @@ export async function getGaji(karyawan_id, bulan, tahun, filterTanggal = null) {
   // 🔍 DEBUG — ini yang paling penting: cek isi baris yang benar-benar dikembalikan.
   // Kalau di sini sudah muncul baris di luar 06-06 s/d 06-07, berarti masalahnya
   // di kolom 'tanggal' (kemungkinan besar bertipe text dengan format bukan YYYY-MM-DD).
-  console.log('[getGaji] baris absensi yang dikembalikan Supabase:', absenRes.data)
 
   const kary   = karyRes.data
   const pasang = pasangRes.data || []
@@ -273,13 +295,14 @@ export async function getGaji(karyawan_id, bulan, tahun, filterTanggal = null) {
     if (ringkasan_absen[status] !== undefined) ringkasan_absen[status]++
   })
 
-  console.log('[getGaji] ringkasan_absen hasil hitung:', ringkasan_absen)
 
   const gaji_pokok      = kary.jabatan?.gaji_pokok || 0
   const tunjangan       = kary.jabatan?.tunjangan  || 0
-  const bonus_pasang    = pasang.reduce((s, p) => s + (p.bonus_dihitung || 0), 0)
-  const bonus_manual    = bonus.filter(b => b.tipe === 'bonus')   .reduce((s, b) => s + b.nominal, 0)
-  const potongan_manual = bonus.filter(b => b.tipe === 'potongan').reduce((s, b) => s + b.nominal, 0)
+  const bonus_pasang    = pasang.reduce((s, p) => s + Number(p.bonus_dihitung || 0), 0)
+  const bonus_manual    = bonus.filter(b => b.tipe === 'bonus').reduce((s, b) => s + Number(b.nominal || 0), 0)
+  const potongan_kasbon = bonus.filter(b => b.tipe === 'potongan' && /^Kasbon\s*[—-]/i.test(b.keterangan || '')).reduce((s, b) => s + Number(b.nominal || 0), 0)
+  const potongan_lainnya = bonus.filter(b => b.tipe === 'potongan' && !/^Kasbon\s*[—-]/i.test(b.keterangan || '')).reduce((s, b) => s + Number(b.nominal || 0), 0)
+  const potongan_manual = potongan_kasbon + potongan_lainnya
   const total_bonus     = bonus_pasang + bonus_manual
   const total_potongan  = potongan_manual
   const gaji_bersih     = gaji_pokok + tunjangan + total_bonus - total_potongan
@@ -289,7 +312,7 @@ export async function getGaji(karyawan_id, bulan, tahun, filterTanggal = null) {
       karyawan: kary.nama,
       bulan, tahun,
       periode_custom: usingCustomPeriod ? { dari, sampai } : null,
-      rincian: { gaji_pokok, tunjangan, bonus_pasang, bonus_manual, potongan_manual },
+      rincian: { gaji_pokok, tunjangan, bonus_pasang, bonus_manual, potongan_manual, potongan_kasbon, potongan_lainnya },
       ringkasan_absen,
       detail_bonus: bonus,
       total_bonus,
