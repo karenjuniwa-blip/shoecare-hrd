@@ -138,32 +138,7 @@ export default function Dashboard() {
         )
       )
 
-      const total = hasilGaji.reduce((sum, result) => {
-        const g = result?.data
-        if (!g) return sum
-
-        const rincian = g.rincian || {}
-        const ringkasan = g.ringkasan_absen || {}
-
-        const totalHariMangkir =
-          (ringkasan.sakit || 0) +
-          (ringkasan.izin || 0)
-
-        const totalPotonganAbsen = totalHariMangkir * potongPerHari
-
-        const gajiPokok      = rincian.gaji_pokok || 0
-        const tunjangan      = rincian.tunjangan || 0
-        const bonusPasang    = rincian.bonus_pasang || 0
-        const bonusManual    = rincian.bonus_manual || 0
-        const potonganSistem = g.total_potongan || 0
-
-        const gajiBersih =
-          (gajiPokok + tunjangan + bonusPasang + bonusManual) -
-          potonganSistem -
-          totalPotonganAbsen
-
-        return sum + Math.max(0, gajiBersih)
-      }, 0)
+      const total = hasilGaji.reduce((sum, result) => sum + Math.max(0, Number(result?.data?.gaji_bersih || 0)), 0)
 
       setTotalPayroll(total)
 

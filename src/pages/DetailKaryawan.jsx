@@ -18,7 +18,7 @@ import {
 
   getPengaturan, 
 
-  getShift, getBonus, postBonus, deleteBonus,
+  getShift, getBonus, postBonus, deleteBonus, getPayrollSnapshot,
   getJadwalKhusus, simpanJadwalKhusus, hapusJadwalKhusus
 
 } from '../api'
@@ -194,10 +194,11 @@ export default function DetailKaryawan() {
         dari: periodeGaji.dari,
         sampai: periodeGaji.sampai
       })
+      const snapRes = await getPayrollSnapshot(id, periodeGaji.dari, periodeGaji.sampai)
 
       setK(kRes.data)
       setAbsen(aRes.data)
-      setGaji(gRes.data)
+      setGaji(snapRes.data?.status === 'dibayar' ? snapRes.data.rincian : gRes.data)
       await refreshTransaksi(periodeGaji.dari, periodeGaji.sampai)
       await refreshJadwal()
       setJabList(jRes.data)
@@ -283,8 +284,8 @@ export default function DetailKaryawan() {
     try {
 
       const gRes = await getGaji(id, null, null, { dari: tglMulai, sampai: tglSelesai })
-
-      setGaji(gRes.data)
+      const snapRes = await getPayrollSnapshot(id, tglMulai, tglSelesai)
+      setGaji(snapRes.data?.status === 'dibayar' ? snapRes.data.rincian : gRes.data)
       await refreshTransaksi(tglMulai, tglSelesai)
 
       alert(`Berhasil memfilter slip gaji periode ${tglMulai} s/d ${tglSelesai}`)
@@ -616,7 +617,7 @@ const totalHariMangkir = (ringkasanGaji?.sakit || 0) + (ringkasanGaji?.izin || 0
 
 
 
-const totalPotonganAbsen = totalHariMangkir * potongPerHari;
+const totalPotonganAbsen = gaji?.rincian?.potongan_absen ?? (totalHariMangkir * potongPerHari);
 
 const gajiPokokBersih = gaji?.rincian?.gaji_pokok || 0;
 
@@ -628,11 +629,13 @@ const bonusManual      = gaji?.rincian?.bonus_manual || 0;
 const potonganKasbon = gaji?.rincian?.potongan_kasbon || 0;
 const potonganLainnya = gaji?.rincian?.potongan_lainnya ?? (gaji?.total_potongan || 0);
 
-const potonganSistem   = gaji?.total_potongan || 0;
+const potonganSistem   = gaji?.rincian?.potongan_manual ?? (gaji?.total_potongan || 0);
 
 const akumulasiPotongan = potonganSistem + totalPotonganAbsen;
 
-const totalGajiBersihAkhir = (gajiPokokBersih + tunjanganJabatan + bonusPasang + bonusManual) - akumulasiPotongan;
+// Satu sumber angka final: API payroll juga digunakan Dashboard dan Keuangan.
+// Jangan menghitung ulang dengan rumus berbeda di halaman/slip ini.
+const totalGajiBersihAkhir = Number(gaji?.gaji_bersih ?? 0);
 
   return (
 
@@ -906,7 +909,7 @@ const totalGajiBersihAkhir = (gajiPokokBersih + tunjanganJabatan + bonusPasang +
 
 
 
-          <div style={{ margin: '12px 16px', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 12, padding: 16 }}>
+          {false && <div style={{ margin: '12px 16px', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 12, padding: 16 }}>
             <h3 style={{ fontSize: 14, margin: '0 0 6px' }}>💰 Bonus & Potongan Kasbon</h3>
             <p style={{ fontSize: 11, color: 'var(--text3)' }}>Transaksi di tanggal periode slip akan otomatis masuk ke perhitungan gaji. Kasbon dicatat sebagai cicilan yang dipotong pada gaji, bukan uang pinjaman yang baru dicairkan.</p>
             <form onSubmit={tambahTransaksi} style={{ display: 'grid', gap: 8 }}>
@@ -925,7 +928,7 @@ const totalGajiBersihAkhir = (gajiPokokBersih + tunjanganJabatan + bonusPasang +
               <strong style={{ fontSize: 12, whiteSpace: 'nowrap', color: t.tipe === 'bonus' ? 'var(--green)' : 'var(--red)' }}>{t.tipe === 'bonus' ? '+' : '−'}{rupiah(t.nominal)}</strong>
               <button type="button" onClick={() => hapusTransaksi(t)} aria-label="Hapus transaksi" style={{ color: 'var(--red)', background: 'transparent', border: 0, cursor: 'pointer' }}>✕</button>
             </div>)}
-          </div>
+          </div>}
 
           {/* Rincian Slip Gaji */}
 
@@ -1033,7 +1036,7 @@ const totalGajiBersihAkhir = (gajiPokokBersih + tunjanganJabatan + bonusPasang +
 
 
 
-          <div style={{ margin: '12px 16px', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 12, padding: 16 }}>
+          {false && <div style={{ margin: '12px 16px', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 12, padding: 16 }}>
             <h3 style={{ fontSize: 14, margin: '0 0 5px' }}>🔄 Tukar Libur / Shift Sementara</h3>
             <p style={{ fontSize: 11, color: 'var(--text3)' }}>Atur pengecualian hanya untuk tanggal tertentu tanpa mengubah jadwal mingguan permanen. Untuk tukar hari libur, tambahkan dua tanggal: hari pengganti kerja dan hari libur penggantinya.</p>
             <form onSubmit={tambahJadwal} style={{ display: 'grid', gap: 8 }}>
@@ -1048,7 +1051,7 @@ const totalGajiBersihAkhir = (gajiPokokBersih + tunjanganJabatan + bonusPasang +
               <span>{j.tanggal} · {Number(j.shift_index) === 3 ? 'Libur' : shifts[j.shift_index]?.nama || `Shift ${Number(j.shift_index)+1}`} <span style={{ color: 'var(--text3)' }}>{j.keterangan}</span></span>
               <button type="button" onClick={() => hapusPengecualian(j)} style={{ color: 'var(--red)', border: 0, background: 'transparent' }}>Hapus</button>
             </div>)}
-          </div>
+          </div>}
 
           {/* Jadwal Mingguan */}
 

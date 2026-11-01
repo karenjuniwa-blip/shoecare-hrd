@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { getKaryawan, getAbsensi, postAbsensi, getPengaturan, getShift, getJadwalKhusus } from '../api'
+import { supabase } from '../lib/supabase'
 
 const COLORS = ['#3b82f6','#22c55e','#f59e0b','#a78bfa','#ef4444','#14b8a6']
 const inisial = n => n.split(' ').slice(0,2).map(w=>w[0]).join('')
@@ -27,6 +28,7 @@ export default function Absen() {
  const [error,    setError]    = useState(null)  
  const [loading,  setLoading]  = useState(true)  
  const [masterShifts, setMasterShifts] = useState([])
+ const [sessionReady, setSessionReady] = useState(false)
  const [jadwalKhusus, setJadwalKhusus] = useState({})
 
  useEffect(() => {
@@ -39,6 +41,21 @@ export default function Absen() {
    try {
      setLoading(true)
      setError(null)
+
+     // Tanpa sesi Supabase Auth, RLS menyembunyikan pengecualian jadwal.
+     // Jangan diam-diam memakai jadwal lama ketika karyawan mungkin tukar shift.
+     const { data: auth } = await supabase.auth.getSession()
+     if (!auth.session) {
+       setError('Sesi database HP toko belum aktif. Admin perlu membuka Home dengan PIN dan mengaktifkan sesi database terlebih dahulu sebelum absensi dapat digunakan.')
+       return
+     }
+     const { data: allowed, error: permissionError } = await supabase.rpc('is_staffora_admin')
+     if (permissionError || !allowed) {
+       setSessionReady(false)
+       setError('Akun database belum terdaftar sebagai admin Staffora. Periksa daftar staffora_admins di Supabase.')
+       return
+     }
+     setSessionReady(true)
 
      const [k, a, cfg, sh, jk] = await Promise.all([
        getKaryawan(),
@@ -97,6 +114,7 @@ export default function Absen() {
  }
 
  async function doAbsen(type) {
+   if (!sessionReady) { setError('Aktifkan sesi database HP toko terlebih dahulu.'); return }
    if (!selected) return
    const now = new Date().toTimeString().slice(0,5)
 
