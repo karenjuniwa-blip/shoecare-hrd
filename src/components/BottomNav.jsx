@@ -1,38 +1,81 @@
+
 import { useLocation, useNavigate } from 'react-router-dom'
+import { useAdmin } from '../hooks/useAdmin'
 
 const menus = [
-  { path: '/absen',      label: 'Absen',      icon: '👥' },
-  { path: '/dashboard',  label: 'Dashboard',  icon: '📊' },
-  { path: '/pasang',     label: 'Pasang',     icon: '💰' },
-  { path: '/pengaturan', label: 'Pengaturan', icon: '⚙️' },
+  { path: '/absen', label: 'Absensi', icon: '✓' },
+  { path: '/home', label: 'Home', icon: '⌂' }
 ]
 
 export default function BottomNav() {
   const location = useLocation()
   const navigate = useNavigate()
-  // Sembunyikan nav di halaman detail
-  if (location.pathname.startsWith('/dashboard/')) return null
+  const { isAdmin } = useAdmin()
+  const current = location.pathname
 
   return (
-    <nav style={{
-      position:'fixed', bottom:0, left:'50%',
-      transform:'translateX(-50%)', width:'100%', maxWidth:420,
-      background:'var(--bg2)', borderTop:'1px solid var(--border)',
-      display:'flex', padding:'8px 0 12px', zIndex:100
-    }}>
-      {menus.map(m => {
-        const active = location.pathname === m.path
+    <nav
+      aria-label="Navigasi utama"
+      style={{
+        position: 'fixed',
+        bottom: 0,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        width: '100%',
+        maxWidth: 420,
+        background: 'var(--bg2)',
+        borderTop: '1px solid var(--border)',
+        display: 'flex',
+        padding: '9px 0 14px',
+        zIndex: 100
+      }}
+    >
+      {menus.map(item => {
+        const active =
+          item.path === '/absen'
+            ? current === '/absen' || current === '/'
+            : current !== '/absen' && current !== '/'
+
         return (
-          <button key={m.path}
-            onClick={() => navigate(m.path)}
+          <button
+            type="button"
+            key={item.path}
+            onClick={() => navigate(item.path)}
+            aria-current={active ? 'page' : undefined}
             style={{
-              flex:1, display:'flex', flexDirection:'column',
-              alignItems:'center', gap:3, background:'none', border:'none',
-              color: active ? 'var(--accent)' : 'var(--text3)',
-              cursor:'pointer', fontSize:20, padding:'4px 0'
-            }}>
-            <span>{m.icon}</span>
-            <span style={{ fontSize:10, fontWeight:500 }}>{m.label}</span>
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 3,
+              background: 'none',
+              border: 'none',
+              color: active
+                ? 'var(--accent)'
+                : 'var(--text3)',
+              cursor: 'pointer',
+              padding: '3px 0',
+              fontFamily: 'inherit'
+            }}
+          >
+            <span
+              aria-hidden="true"
+              style={{
+                fontSize: 23,
+                lineHeight: 1
+              }}
+            >
+              {item.icon}
+            </span>
+
+            <span
+              style={{
+                fontSize: 12,
+                fontWeight: active ? 700 : 500
+              }}
+            >
+              {item.label}
+            </span>
           </button>
         )
       })}
