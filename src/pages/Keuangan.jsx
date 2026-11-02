@@ -1,21 +1,11 @@
 import { useEffect, useState } from 'react'
+import { payrollPeriod } from '../utils/payrollPeriod'
 import { getKaryawan, getBonusRentang, postBonus, deleteBonus, getKasbon, buatKasbon, getCicilanKasbon, tambahCicilanKasbon, getGaji, getPengaturan, getPayrollSnapshot, simpanPayrollSnapshot, rupiah } from '../api'
 
 const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` }
 const field = { width: '100%', boxSizing: 'border-box', padding: 10, background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', fontFamily: 'inherit' }
 const btn = { width: '100%', padding: 11, background: 'var(--accent)', border: 0, borderRadius: 9, color: '#fff', fontWeight: 700, cursor: 'pointer' }
 const card = { background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 13, padding: 14, marginBottom: 12 }
-
-function periodeAwal(d, cutoff) {
-  const x = new Date(`${d}T12:00:00`)
-  const y = x.getFullYear(), m = x.getMonth()
-  const akhir = new Date(y, m, Math.min(cutoff, new Date(y, m+1, 0).getDate()))
-  const previous = x.getDate() <= cutoff ? new Date(y, m-1, Math.min(cutoff, new Date(y, m, 0).getDate())) : akhir
-  const awal = new Date(previous.getFullYear(), previous.getMonth(), previous.getDate()+1)
-  const selesai = x.getDate() <= cutoff ? akhir : new Date(y,m+1,Math.min(cutoff,new Date(y,m+2,0).getDate()))
-  const fmt = t => `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`
-  return { dari: fmt(awal), sampai: fmt(selesai) }
-}
 
 export default function Keuangan() {
   const [tab, setTab] = useState('bonus')
@@ -37,7 +27,7 @@ export default function Keuangan() {
     Promise.all([getKaryawan(), getPengaturan()]).then(([k,c]) => {
       setPeople(k.data || [])
       if (k.data?.length) setPerson(String(k.data[0].id))
-      setPeriod(periodeAwal(today(), Number(c.data?.tgl_tutup_gajian) || 25))
+      setPeriod(payrollPeriod(new Date(), Number(c.data?.tgl_tutup_gajian) || 25))
     }).catch(e => setError(e.message))
   }, [])
 
@@ -103,10 +93,9 @@ export default function Keuangan() {
   const saldo = p => Math.max(0, Number(p.nominal) - cicilan.filter(c => c.kasbon_id === p.id).reduce((s,c)=>s+Number(c.nominal),0))
   const activeKasbon = pinjaman.filter(p => saldo(p) > 0)
   const displayGaji = snapshot?.status === 'dibayar' ? snapshot.rincian : gaji
-  return <main style={{ padding: 16 }}>
-    <h2 style={{ marginBottom: 5 }}>Keuangan</h2>
-    <p style={{ color: 'var(--text3)', fontSize: 12 }}>Bonus, kasbon, potongan dan gaji dalam satu tempat.</p>
-    <div style={card}>
+  return <main className="sf-page sf-finance">
+    <div className="sf-page-heading"><h2>Keuangan</h2></div>
+    <div className="sf-card sf-finance-filter" style={card}>
       <label style={{ fontSize: 11 }}>Karyawan</label>
       <select aria-label="Karyawan" value={person} onChange={e=>setPerson(e.target.value)} style={field}>{people.map(p=><option key={p.id} value={p.id}>{p.nama}</option>)}</select>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 10 }}>
@@ -120,7 +109,7 @@ export default function Keuangan() {
       {[['bonus','Bonus'],['kasbon','Kasbon'],['gaji','Gaji']].map(([key,name]) => <button key={key} onClick={()=>setTab(key)} style={{ padding: 10, borderRadius: 9, border: '1px solid var(--border)', background: tab===key ? 'var(--accent)' : 'var(--bg2)', color: tab===key ? '#fff' : 'var(--text)', fontWeight: 700 }}>{name}</button>)}
     </div>
     {tab === 'bonus' && <>
-      <form onSubmit={submitBonus} style={card}>
+      <form onSubmit={submitBonus} className="sf-finance-form" style={card}>
         <h3 style={{ marginTop: 0 }}>Tambah Bonus / Potongan</h3>
         <div style={{ display:'grid', gap: 9 }}>
           <select value={form.tipe} onChange={e=>setForm(p=>({...p,tipe:e.target.value}))} style={field}><option value="bonus">Bonus</option><option value="potongan">Potongan lainnya</option></select>
@@ -130,27 +119,27 @@ export default function Keuangan() {
           <button type="submit" style={btn}>Simpan Transaksi</button>
         </div>
       </form>
-      <section style={card}><h3>Riwayat Transaksi</h3>{!transaksi.length && <p style={{ fontSize: 12, color:'var(--text3)' }}>Belum ada transaksi.</p>}{transaksi.map(t=><div key={t.id} style={{ display:'flex',justifyContent:'space-between',gap:8,padding:'9px 0',borderBottom:'1px solid var(--border)',fontSize:12 }}><span>{t.tanggal} · {t.keterangan || (t.tipe === 'bonus' ? 'Bonus' : 'Potongan')}</span><strong>{t.tipe==='bonus'?'+':'−'}{rupiah(t.nominal)}</strong><button onClick={()=>hapus(t)} style={{ color:'var(--red)',border:0,background:'transparent' }}>Hapus</button></div>)}</section>
+      <section className="sf-finance-section" style={card}><h3>Riwayat Transaksi</h3>{!transaksi.length && <p style={{ fontSize: 12, color:'var(--text3)' }}>Belum ada transaksi.</p>}{transaksi.map(t=><div key={t.id} style={{ display:'flex',justifyContent:'space-between',gap:8,padding:'9px 0',borderBottom:'1px solid var(--border)',fontSize:12 }}><span>{t.tanggal} · {t.keterangan || (t.tipe === 'bonus' ? 'Bonus' : 'Potongan')}</span><strong>{t.tipe==='bonus'?'+':'−'}{rupiah(t.nominal)}</strong><button onClick={()=>hapus(t)} style={{ color:'var(--red)',border:0,background:'transparent' }}>Hapus</button></div>)}</section>
     </>}
     {tab === 'kasbon' && <>
-      <form onSubmit={submitKasbon} style={card}><h3 style={{marginTop:0}}>Catat Pencairan Kasbon</h3><div style={{display:'grid',gap:9}}>
+      <form onSubmit={submitKasbon} className="sf-finance-form" style={card}><h3 style={{marginTop:0}}>Catat Pencairan Kasbon</h3><div style={{display:'grid',gap:9}}>
         <input aria-label="Tanggal pencairan" type="date" required value={kasbonForm.tanggal} onChange={e=>setKasbonForm(p=>({...p,tanggal:e.target.value}))} style={field}/>
         <input aria-label="Nominal pinjaman" type="number" min="1" required placeholder="Nominal pinjaman (Rp)" value={kasbonForm.nominal} onChange={e=>setKasbonForm(p=>({...p,nominal:e.target.value}))} style={field}/>
         <input aria-label="Cicilan rencana" type="number" min="0" placeholder="Rencana cicilan tiap gajian (Rp)" value={kasbonForm.cicilan_nominal} onChange={e=>setKasbonForm(p=>({...p,cicilan_nominal:e.target.value}))} style={field}/>
         <input placeholder="Keterangan" value={kasbonForm.keterangan} onChange={e=>setKasbonForm(p=>({...p,keterangan:e.target.value}))} style={field}/>
         <button type="submit" style={btn}>Catat Kasbon</button>
       </div></form>
-      <section style={card}><h3>Saldo Kasbon</h3>{!pinjaman.length && <p style={{fontSize:12,color:'var(--text3)'}}>Belum ada kasbon.</p>}{pinjaman.map(p=><div key={p.id} style={{padding:'10px 0',borderBottom:'1px solid var(--border)',fontSize:12}}><strong>{p.tanggal} · {rupiah(p.nominal)}</strong><div style={{color:'var(--text3)',marginTop:4}}>Sisa: {rupiah(saldo(p))} · Cicilan rencana: {rupiah(p.cicilan_nominal || 0)}</div><div>{p.keterangan}</div></div>)}</section>
-      {activeKasbon.length > 0 && <form onSubmit={submitCicilan} style={card}><h3 style={{marginTop:0}}>Potong Cicilan dari Gaji</h3><div style={{display:'grid',gap:9}}>
+      <section className="sf-finance-section" style={card}><h3>Saldo Kasbon</h3>{!pinjaman.length && <p style={{fontSize:12,color:'var(--text3)'}}>Belum ada kasbon.</p>}{pinjaman.map(p=><div key={p.id} style={{padding:'10px 0',borderBottom:'1px solid var(--border)',fontSize:12}}><strong>{p.tanggal} · {rupiah(p.nominal)}</strong><div style={{color:'var(--text3)',marginTop:4}}>Sisa: {rupiah(saldo(p))} · Cicilan rencana: {rupiah(p.cicilan_nominal || 0)}</div><div>{p.keterangan}</div></div>)}</section>
+      {activeKasbon.length > 0 && <form onSubmit={submitCicilan} className="sf-finance-form" style={card}><h3 style={{marginTop:0}}>Potong Cicilan dari Gaji</h3><div style={{display:'grid',gap:9}}>
         <select aria-label="Pilih kasbon" required value={cicilanForm.kasbon_id} onChange={e=>setCicilanForm(p=>({...p,kasbon_id:e.target.value}))} style={field}><option value="">Pilih kasbon</option>{activeKasbon.map(p=><option key={p.id} value={p.id}>{p.tanggal} · Sisa {rupiah(saldo(p))}</option>)}</select>
         <input type="date" required value={cicilanForm.tanggal} onChange={e=>setCicilanForm(p=>({...p,tanggal:e.target.value}))} style={field}/>
         <input type="number" required min="1" placeholder="Nominal cicilan (Rp)" value={cicilanForm.nominal} onChange={e=>setCicilanForm(p=>({...p,nominal:e.target.value}))} style={field}/>
         <input placeholder="Keterangan" value={cicilanForm.keterangan} onChange={e=>setCicilanForm(p=>({...p,keterangan:e.target.value}))} style={field}/>
         <button type="submit" style={btn}>Catat Potongan Cicilan</button>
       </div></form>}
-      <section style={card}><h3>Riwayat Cicilan</h3>{cicilan.map(c=><div key={c.id} style={{padding:'7px 0',borderBottom:'1px solid var(--border)',fontSize:12}}>{c.tanggal} · −{rupiah(c.nominal)} · {c.keterangan}</div>)}</section>
+      <section className="sf-finance-section" style={card}><h3>Riwayat Cicilan</h3>{cicilan.map(c=><div key={c.id} style={{padding:'7px 0',borderBottom:'1px solid var(--border)',fontSize:12}}>{c.tanggal} · −{rupiah(c.nominal)} · {c.keterangan}</div>)}</section>
     </>}
-    {tab === 'gaji' && <section style={card}>
+    {tab === 'gaji' && <section className="sf-finance-section" style={card}>
       <h3 style={{marginTop:0}}>Rekap Gaji</h3>
       {displayGaji && <>{[
         ['Gaji pokok',displayGaji.rincian.gaji_pokok], ['Tunjangan',displayGaji.rincian.tunjangan], ['Bonus pasang',displayGaji.rincian.bonus_pasang], ['Bonus lainnya',displayGaji.rincian.bonus_manual], ['Potongan kasbon',-displayGaji.rincian.potongan_kasbon], ['Potongan lainnya',-displayGaji.rincian.potongan_lainnya], ['Potongan absen',-displayGaji.rincian.potongan_absen]
